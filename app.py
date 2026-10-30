@@ -75,7 +75,7 @@ with t1:
     if not df_affichage.empty:
         st.write("---")
         
-        col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7, col_h8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 2.5])
+        col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7, col_h8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 3.5])
         col_h1.markdown("**Référence**")
         col_h2.markdown("**Désignation**")
         col_h3.markdown("**Catégorie**")
@@ -90,7 +90,7 @@ with t1:
             ref_id = row['Référence']
             prefix = "⚠️ " if row['Quantité'] <= row['Alerte Min'] else ""
             
-            col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7, col_r8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 2.5])
+            col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7, col_r8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 3.5])
             col_r1.write(f"{prefix}{ref_id}")
             col_r2.write(row['Désignation'])
             col_r3.write(row['Catégorie'])
@@ -99,35 +99,62 @@ with t1:
             col_r6.write(f"**{row['Quantité']}**")
             col_r7.write(str(row['Alerte Min']))
             
-            c_btn1, c_btn2 = col_r8.columns(2)
-            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre rapidement"):
+            # 3 Boutons d'action rapides sur mobile
+            c_btn1, c_btn2, c_btn3 = col_r8.columns(3)
+            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
                 st.session_state[f"pop_v_{ref_id}"] = True
-            if c_btn2.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
+                st.session_state[f"pop_e_{ref_id}"] = False
+            if c_btn2.button("📦", key=f"btn_t_e_{ref_id}", help="Ajouter du Stock (Fournisseur)"):
+                st.session_state[f"pop_e_{ref_id}"] = True
+                st.session_state[f"pop_v_{ref_id}"] = False
+            if c_btn3.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
                 st.session_state[f"pop_a_{ref_id}"] = True
             
+            # Action de VENTE RAPIDE
             if f"pop_v_{ref_id}" in st.session_state and st.session_state[f"pop_v_{ref_id}"]:
                 with st.form(f"quick_v_{ref_id}"):
                     st.info(f"💸 Vente rapide pour : {ref_id}")
                     q_client = st.text_input("Nom du Client :", value="Client Comptoir").strip()
-                    q_vendu = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']), step=1)
+                    q_vendu = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']) if int(row['Quantité']) > 0 else 1, step=1)
                     q_paye = st.radio("Mode de règlement :", ["💵 Espèces", "💳 Carte Bancaire"], horizontal=True)
                     cf1, cf2 = st.columns(2)
                     if cf1.form_submit_button("Valider la vente"):
-                        df_p.at[idx, "Quantité"] -= q_vendu
+                        if row['Quantité'] < q_vendu:
+                            st.error("Stock insuffisant !")
+                        else:
+                            df_p.at[idx, "Quantité"] -= q_vendu
+                            df_p.to_csv(F_PIECES, index=False)
+                            pa_t = float(row["Prix Achat"] * q_vendu)
+                            pv_t = float(row["Prix Vente"] * q_vendu)
+                            n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
+                            df_m = pd.concat([df_m, n_mouv], ignore_index=True)
+                            df_m.to_csv(F_MOUV, index=False)
+                            st.session_state[f"pop_v_{ref_id}"] = False
+                            st.rerun()
+                    if cf2.form_submit_button("Fermer"):
+                        st.session_state[f"pop_v_{ref_id}"] = False
+                        st.rerun()
+
+            # NOUVELLE ACTION : ENTRÉE DE STOCK EN DIRECT DEPUIS L'ACCUEIL
+            if f"pop_e_{ref_id}" in st.session_state and st.session_state[f"pop_e_{ref_id}"]:
+                with st.form(f"quick_e_{ref_id}"):
+                    st.success(f"📦 Arrivage fournisseur pour : {ref_id}")
+                    q_fourn = st.text_input("Nom du Fournisseur :", value="Fournisseur").strip()
+                    q_recu = st.number_input("Quantité de pièces reçues :", min_value=1, step=1, value=1)
+                    ce1, ce2 = st.columns(2)
+                    if ce1.form_submit_button("Valider l'entrée"):
+                        df_p.at[idx, "Quantité"] += q_recu
                         df_p.to_csv(F_PIECES, index=False)
                         
-                        pa_t = float(row["Prix Achat"] * q_vendu)
-                        pv_t = float(row["Prix Vente"] * q_vendu)
-                        
-                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
+                        pa_t = float(row["Prix Achat"] * q_recu)
+                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "📦 Commande Fournisseur (Entrée)", int(q_recu), float(pa_t), 0.0, str(q_fourn), "Fournisseur"]], columns=df_m.columns)
                         df_m = pd.concat([df_m, n_mouv], ignore_index=True)
                         df_m.to_csv(F_MOUV, index=False)
                         
-                        st.session_state[f"pop_v_{ref_id}"] = False
-                        st.success("Vente enregistrée avec succès !")
+                        st.session_state[f"pop_e_{ref_id}"] = False
                         st.rerun()
-                    if cf2.form_submit_button("Fermer"):
-                        st.session_state[f"pop_v_{ref_id}"] = False
+                    if ce2.form_submit_button("Fermer"):
+                        st.session_state[f"pop_e_{ref_id}"] = False
                         st.rerun()
 
             if f"pop_a_{ref_id}" in st.session_state and st.session_state[f"pop_a_{ref_id}"]:
@@ -146,57 +173,21 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER (TOTALEMENT COMPATIBLE MOBILE)
+# ONGLET 2 : AJOUTER OU MODIFIER
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
     rf_gest = st.text_input("Saisir la Référence à gérer :", key="txt_gest_ref").strip().upper()
     existe = False
-    
     val_nom, val_cat, val_pa, val_pv, val_qt, val_sl = "", "", 0.0, 0.0, 0, 0
     
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        # Récupération sécurisée sous forme de ligne dictionnaire
-        p_row = df_p[df_p["Référence"] == rf_gest].iloc[0]
+        p_row = df_p[df_p["Référence"] == rf_gest].iloc
         st.info(f"🔎 Référence existante trouvée : {p_row['Désignation']}")
-        
         val_nom = str(p_row["Désignation"])
         val_cat = str(p_row["Catégorie"])
         val_pa = float(p_row["Prix Achat"])
         val_pv = float(p_row["Prix Vente"])
         val_qt = int(p_row["Quantité"])
         val_sl = int(p_row["Alerte Min"])
-    elif rf_gest:
-        st.success("✨ Nouvelle référence détectée.")
-
-    if rf_gest:
-        with st.form("f_add_edit", clear_on_submit=not existe):
-            nm = st.text_input("Désignation / Nom :", value=val_nom).strip()
-            ct = st.text_input("Catégorie :", value=val_cat).strip()
-            col_a, col_b = st.columns(2)
-            pa = col_a.number_input("Prix d'achat (€) :", min_value=0.0, value=val_pa)
-            if existe:
-                col_a.write(f"**Stock actuel :** {val_qt} pcs")
-                qt = val_qt
-            else:
-                qt = col_a.number_input("Stock Initial :", min_value=0, value=val_qt)
-            pv = col_b.number_input("Prix de vente (€) :", min_value=0.0, value=val_pv)
-            sl = col_b.number_input("Seuil alerte min :", min_value=0, value=val_sl)
-            
-            if st.form_submit_button("✏️ Modifier la pièce" if existe else "➕ Créer la pièce"):
-                if not nm: st.error("Le nom est obligatoire.")
-                else:
-                    if existe:
-                        df_p.loc[df_p["Référence"] == rf_gest, ["Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Alerte Min"]] = [nm, ct, pa, pv, sl]
-                    else:
-                        df_p = pd.concat([df_p, pd.DataFrame([[rf_gest, nm, ct, pa, pv, qt, sl]], columns=df_p.columns)], ignore_index=True)
-                    df_p.to_csv(F_PIECES, index=False)
-                    st.rerun()
-
-# ---------------------------------------------------------------------
-# ONGLET 3 : FORMULAIRE COMMANDE FOURNISSEUR
-# ---------------------------------------------------------------------
-with st.container() if False else t3:
-    st.subheader("📝 Formulaire de mouvement de stock")
-    
