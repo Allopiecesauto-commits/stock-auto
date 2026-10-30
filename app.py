@@ -19,7 +19,7 @@ def charger_donnees():
     df = pd.read_csv(F_PIECES)
     df_m = pd.read_csv(F_MOUV)
     
-    df["Référence"] = df["Référence"].astype(str).str.upper()
+    df["Référence"] = df["Référence"].astype(str).str.upper().str.strip()
     df["Désignation"] = df["Désignation"].fillna("").astype(str)
     df["Catégorie"] = df["Catégorie"].fillna("").astype(str)
     df["Prix Achat"] = pd.to_numeric(df["Prix Achat"], errors='coerce').fillna(0.0).astype(float)
@@ -146,7 +146,7 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER (BOUTON DE VALIDATION FIXE SÉCURISÉ)
+# ONGLET 2 : AJOUTER OU MODIFIER (BOUTONS FORCE FIXES SANS CONDITIONS)
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
@@ -157,22 +157,24 @@ with t2:
     
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        p_row = df_p[df_p["Référence"] == rf_gest].iloc[0]
-        st.info(f"🔎 Référence trouvée : {p_row['Désignation']}")
+        p_row = df_p[df_p["Référence"] == rf_gest].iloc
+        st.info(f"🔎 Référence trouvée dans votre stock : {p_row['Désignation']}")
         val_nom = str(p_row["Désignation"])
         val_cat = str(p_row["Catégorie"])
         val_pa = float(p_row["Prix Achat"])
         val_pv = float(p_row["Prix Vente"])
         val_qt = int(p_row["Quantité"])
         val_sl = int(p_row["Alerte Min"])
-        
-    nm = st.text_input("Désignation / Nom :", value=val_nom, key="input_nm").strip()
+    elif rf_gest:
+        st.success("✨ Nouvelle référence détectée. Remplissez les cases ci-dessous :")
+
+    nm = st.text_input("Désignation / Nom de la pièce :", value=val_nom, key="input_nm").strip()
     ct = st.text_input("Catégorie :", value=val_cat, key="input_ct").strip()
     col_a, col_b = st.columns(2)
     pa = col_a.number_input("Prix d'achat (€) :", min_value=0.0, value=val_pa, key="input_pa")
     
     if existe:
-        col_a.write(f"**Stock actuel :** {val_qt} pcs")
+        col_a.write(f"**Stock actuel en magasin :** {val_qt} pcs")
         qt = val_qt
     else:
         qt = col_a.number_input("Stock Initial :", min_value=0, value=val_qt, key="input_qt")
@@ -182,10 +184,7 @@ with t2:
     
     st.write("")
     
-    # BOUTONS EN DEHORS DE TOUT BLOC POUR ÊTRE TOUJOURS VISIBLES
+    # Bouton d'action TOUJOURS visible de manière fixe en bas du formulaire
     if existe:
-        if st.button("✏️ Enregistrer les modifications", key="btn_mod_secure", type="primary", use_container_width=True):
-            if not nm:
-                st.error("Le nom est obligatoire.")
-            else:
-                df_p.loc[df_p["Référence"] == rf_gest, ["Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Alerte Min"]] = [nm, ct, pa, pv, sl]
+        if st.button("✏️ Enregistrer les modifications de la pièce", key="btn_mod_secure", type="primary", use_container_width=True):
+            if not rf_gest or not nm:
