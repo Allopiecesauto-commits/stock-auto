@@ -33,7 +33,6 @@ df_p, df_m = charger_donnees()
 
 st.title("🚗 Stock Auto Privé")
 
-# Ajout du nouvel onglet "Retour Fournisseur"
 t1, t2, t3, t4, t5 = st.tabs(["📊 Accueil & Recherche", "📦 Ajouter / Modifier", "📥 Commande Fournisseur", "📤 Retour Fournisseur", "📈 Comptabilité & Bilans"])
 
 if "filtre_alerte" not in st.session_state:
@@ -91,7 +90,6 @@ with t1:
             col_r6.write(f"**{row['Quantité']}**")
             col_r7.write(str(row['Alerte Min']))
             
-            # 4 Boutons d'action rapides (Ajout du bouton Retour Fournisseur)
             c_btn1, c_btn2, c_btn3, c_btn4 = col_r8.columns(4)
             if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
                 st.session_state[f"pop_v_{ref_id}"] = not st.session_state.get(f"pop_v_{ref_id}", False)
@@ -108,7 +106,6 @@ with t1:
             if c_btn4.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
                 st.session_state[f"pop_a_{ref_id}"] = not st.session_state.get(f"pop_a_{ref_id}", False)
             
-            # Action de VENTE RAPIDE
             if st.session_state.get(f"pop_v_{ref_id}", False):
                 st.info(f"💸 Vente rapide pour : {ref_id}")
                 q_client = st.text_input("Nom du Client :", value="Client Comptoir", key=f"qc_{ref_id}").strip()
@@ -128,7 +125,6 @@ with t1:
                         st.session_state[f"pop_v_{ref_id}"] = False
                         st.rerun()
 
-            # Action d'ENTRÉE STOCK FOURNISSEUR RAPIDE
             if st.session_state.get(f"pop_e_{ref_id}", False):
                 st.success(f"📦 Arrivage fournisseur pour : {ref_id}")
                 q_fourn = st.text_input("Nom du Fournisseur :", value="Fournisseur", key=f"qf_{ref_id}").strip()
@@ -143,7 +139,6 @@ with t1:
                     st.session_state[f"pop_e_{ref_id}"] = False
                     st.rerun()
 
-            # ACTION RAPIDE RETOUR FOURNISSEUR (BOUTON CARTON)
             if st.session_state.get(f"pop_ret_{ref_id}", False):
                 st.warning(f"📤 Enregistrer un retour marchandise pour : {ref_id}")
                 r_fourn = st.text_input("Nom du Fournisseur concerné :", value="Fournisseur", key=f"rfourn_{ref_id}").strip()
@@ -151,7 +146,7 @@ with t1:
                 r_prix = st.number_input("Prix d'achat unitaire remboursé (€) :", min_value=0.0, value=float(row['Prix Achat']), step=0.5, key=f"rprix_{ref_id}")
                 if st.button("Confirmer le Retour Marchandise", key=f"conf_r_action_{ref_id}", type="primary"):
                     if row['Quantité'] < r_qte:
-                        st.error("Impossible de renvoyer plus de pièces que vous n'en avez en stock !")
+                        st.error("Impossible de renvoyer plus de pièces !")
                     else:
                         df_p.at[idx, "Quantité"] -= r_qte
                         df_p.to_csv(F_PIECES, index=False)
@@ -160,8 +155,16 @@ with t1:
                         df_m = pd.concat([df_m, n_mouv], ignore_index=True)
                         df_m.to_csv(F_MOUV, index=False)
                         st.session_state[f"pop_ret_{ref_id}"] = False
-                        st.success("Retour enregistré avec succès !")
                         st.rerun()
 
             if st.session_state.get(f"pop_a_{ref_id}", False):
                 st.warning(f"Supprimer la fiche {ref_id} ?")
+                if st.button("Confirmer la suppression", key=f"conf_t_del_{ref_id}", type="primary"):
+                    df_p = df_p.drop(idx)
+                    df_p.to_csv(F_PIECES, index=False)
+                    st.session_state[f"pop_a_{ref_id}"] = False
+                    st.rerun()
+            st.write("---")
+    else:
+        st.write("Aucun article à afficher.")
+
