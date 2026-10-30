@@ -12,12 +12,16 @@ def charger_donnees():
     if not os.path.exists(F_PIECES):
         pd.DataFrame(columns=cols_pieces).to_csv(F_PIECES, index=False)
         
-    cols_mouv = ["Date", "Référence", "Désignation", "Type", "Quantité", "Prix Achat Total", "Prix Vente Total", "Tiers"]
+    cols_mouv = ["Date", "Référence", "Désignation", "Type", "Quantité", "Prix Achat Total", "Prix Vente Total", "Tiers", "Paiement"]
     if not os.path.exists(F_MOUV):
         pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
     
     df = pd.read_csv(F_PIECES)
     df_m = pd.read_csv(F_MOUV)
+    
+    # Sécurité pour ajouter la colonne Paiement sur les anciennes ventes si besoin
+    if "Paiement" not in df_m.columns:
+        df_m["Paiement"] = "Non spécifié"
     
     df["Référence"] = df["Référence"].astype(str).str.upper()
     df["Désignation"] = df["Désignation"].fillna("").astype(str)
@@ -33,7 +37,7 @@ df_p, df_m = charger_donnees()
 
 st.title("🚗 Stock Auto Privé")
 
-t1, t2, t3, t4 = st.tabs(["📊 Accueil & Recherche", "📦 Ajouter / Modifier", "🔄 Ventes & Entrées", "📈 Comptabilité & Bilans"])
+t1, t2, t3, t4 = st.tabs(["📊 Accueil & Recherche", "📦 Ajouter / Modifier", "🔄 Commande Fournisseur", "📈 Comptabilité & Bilans"])
 
 if "filtre_alerte" not in st.session_state:
     st.session_state.filtre_alerte = False
@@ -92,16 +96,17 @@ with t1:
             col_r7.write(str(row['Alerte Min']))
             
             c_btn1, c_btn2 = col_r8.columns(2)
-            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
+            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre rapidement"):
                 st.session_state[f"pop_v_{ref_id}"] = True
             if c_btn2.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
                 st.session_state[f"pop_a_{ref_id}"] = True
             
             if f"pop_v_{ref_id}" in st.session_state and st.session_state[f"pop_v_{ref_id}"]:
                 with st.form(f"quick_v_{ref_id}"):
-                    st.info(f"Vente rapide pour : {ref_id}")
+                    st.info(f"💸 Vente rapide pour : {ref_id}")
                     q_client = st.text_input("Nom du Client :", value="Client Comptoir").strip()
                     q_vendu = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']), step=1)
+                    q_paye = st.radio("Mode de règlement :", ["💵 Espèces", "💳 Carte Bancaire"], horizontal=True)
                     cf1, cf2 = st.columns(2)
                     if cf1.form_submit_button("Valider la vente"):
                         df_p.at[idx, "Quantité"] -= q_vendu
@@ -109,7 +114,7 @@ with t1:
                         
                         pa_t = float(row["Prix Achat"] * q_vendu)
                         pv_t = float(row["Prix Vente"] * q_vendu)
-                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", q_vendu, pa_t, pv_t, q_client]], columns=df_m.columns)
+                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", q_vendu, pa_t, pv_t, q_client, q_paye]], columns=df_m.columns)
                         df_m = pd.concat([df_m, n_mouv], ignore_index=True)
                         df_m.to_csv(F_MOUV, index=False)
                         
@@ -181,18 +186,12 @@ with t2:
                     st.rerun()
 
 # ---------------------------------------------------------------------
-# ONGLET 3 : ENREGISTRER UNE VENTE OU UNE ENTRÉE (FORMULAIRE FIXE SIMPLE)
+# ONGLET 3 : FORMULAIRE COMMANDE FOURNISSEUR
 # ---------------------------------------------------------------------
 with t3:
     st.subheader("📝 Formulaire de mouvement de stock")
-    st.write("Saisissez les informations de la transaction ci-dessous :")
     
     with st.form("form_mouvement_fixe", clear_on_submit=True):
         rf_m = st.text_input("Référence de la pièce :").strip().upper()
         tiers = st.text_input("Nom du Tiers (Client ou Fournisseur) :").strip()
         q_m = st.number_input("Quantité de pièces :", min_value=1, step=1, value=1)
-        
-        col_b1, col_b2 = st.columns(2)
-        btn_vente = col_b1.form_submit_button("💸 Valider la Vente (Sortie)", use_container_width=True)
-        btn_achat = col_b2.form_submit_button("📦 Valider l'Arrivage Fournisseur (Entrée)", use_container_width=True)
-        
