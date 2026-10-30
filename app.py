@@ -146,18 +146,18 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER
+# ONGLET 2 : AJOUTER OU MODIFIER (SANS BLOCS BRUITS / INCASSABLE MOBILE)
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
     rf_gest = st.text_input("Saisir la Référence à gérer :", key="txt_gest_ref").strip().upper()
-    existe = False
     
     val_nom, val_cat, val_pa, val_pv, val_qt, val_sl = "", "", 0.0, 0.0, 0, 0
+    existe = False
     
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        p_row = df_p[df_p["Référence"] == rf_gest].iloc[0]
+        p_row = df_p[df_p["Référence"] == rf_gest].iloc
         st.info(f"🔎 Référence trouvée : {p_row['Désignation']}")
         val_nom = str(p_row["Désignation"])
         val_cat = str(p_row["Catégorie"])
@@ -165,28 +165,27 @@ with t2:
         val_pv = float(p_row["Prix Vente"])
         val_qt = int(p_row["Quantité"])
         val_sl = int(p_row["Alerte Min"])
-    elif rf_gest:
-        st.success("✨ Nouvelle référence détectée. Remplissez les cases pour la créer :")
-
-    if rf_gest:
-        nm = st.text_input("Désignation / Nom :", value=val_nom, key="input_nm").strip()
-        ct = st.text_input("Catégorie :", value=val_cat, key="input_ct").strip()
-        col_a, col_b = st.columns(2)
-        pa = col_a.number_input("Prix d'achat (€) :", min_value=0.0, value=val_pa, key="input_pa")
         
-        if existe:
-            col_a.write(f"**Stock actuel :** {val_qt} pcs")
-            qt = val_qt
-        else:
-            qt = col_a.number_input("Stock Initial :", min_value=0, value=val_qt, key="input_qt")
-            
-        pv = col_b.number_input("Prix de vente (€) :", min_value=0.0, value=val_pv, key="input_pv")
-        sl = col_b.number_input("Seuil alerte min :", min_value=0, value=val_sl, key="input_sl")
+    nm = st.text_input("Désignation / Nom :", value=val_nom, key="input_nm").strip()
+    ct = st.text_input("Catégorie :", value=val_cat, key="input_ct").strip()
+    col_a, col_b = st.columns(2)
+    pa = col_a.number_input("Prix d'achat (€) :", min_value=0.0, value=val_pa, key="input_pa")
+    
+    if existe:
+        col_a.write(f"**Stock actuel :** {val_qt} pcs")
+        qt = val_qt
+    if not existe:
+        qt = col_a.number_input("Stock Initial :", min_value=0, value=val_qt, key="input_qt")
         
-        st.write("")
-        texte_bouton = "✏️ Enregistrer les modifications" if existe else "➕ Créer et ajouter au catalogue"
-        
-        if st.button(texte_bouton, key="main_action_btn", type="primary"):
+    pv = col_b.number_input("Prix de vente (€) :", min_value=0.0, value=val_pv, key="input_pv")
+    sl = col_b.number_input("Seuil alerte min :", min_value=0, value=val_sl, key="input_sl")
+    
+    st.write("")
+    
+    if existe:
+        if st.button("✏️ Enregistrer les modifications", key="btn_mod_secure", type="primary"):
             if not nm:
-                st.error("Le nom de la pièce est obligatoire.")
+                st.error("Le nom est obligatoire.")
             else:
+                df_p.loc[df_p["Référence"] == rf_gest, ["Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Alerte Min"]] = [nm, ct, pa, pv, sl]
+                df_p.to_csv(F_PIECES, index=False)
