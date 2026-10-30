@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 import os
 
-st.set_page_config(page_title="Stock Auto", page_icon="🚗", layout="centered")
+st.set_page_config(page_title="Stock Auto", page_icon="🚗", layout="wide") # Passage en mode large pour le tableau
 
 F_PIECES, F_MOUV = "web_pieces.csv", "web_mouvements.csv"
 
@@ -39,7 +39,7 @@ if "filtre_alerte" not in st.session_state:
     st.session_state.filtre_alerte = False
 
 # ---------------------------------------------------------------------
-# ONGLET 1 : ACCUEIL
+# ONGLET 1 : ACCUEIL (AFFICHAGE EN LIGNE / TABLEAU DYNAMIQUE)
 # ---------------------------------------------------------------------
 with t1:
     alt_df = df_p[df_p["Quantité"] <= df_p["Alerte Min"]] if not df_p.empty else pd.DataFrame()
@@ -66,52 +66,77 @@ with t1:
 
     if not df_affichage.empty:
         st.write("---")
+        
+        # En-tête des colonnes du tableau
+        col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7, col_h8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 2.5])
+        col_h1.markdown("**Référence**")
+        col_h2.markdown("**Désignation**")
+        col_h3.markdown("**Catégorie**")
+        col_h4.markdown("**P. Achat**")
+        col_h5.markdown("**P. Vente**")
+        col_h6.markdown("**Stock**")
+        col_h7.markdown("**Seuil**")
+        col_h8.markdown("**Actions**")
+        st.write("---")
+
+        # Lignes du tableau
         for idx, row in df_affichage.iterrows():
             ref_id = row['Référence']
-            prefix_status = "⚠️ " if row['Quantité'] <= row['Alerte Min'] else "✅ "
             
-            with st.expander(f"{prefix_status} Réf: {ref_id} — {row['Désignation']}", expanded=True):
-                col_i1, col_i2, col_i3 = st.columns(3)
-                with col_i1:
-                    st.write(f"**Catégorie :** {row['Catégorie']} | **Seuil Min :** {row['Alerte Min']}")
-                    st.write(f"**Prix Achat :** {row['Prix Achat']}€ | **Prix Vente :** {row['Prix Vente']}€")
-                with col_i2:
-                    st.metric("En Stock", f"{row['Quantité']} pcs")
-                with col_i3:
-                    if st.button("💸 Vendre", key=f"btn_v_{ref_id}", use_container_width=True):
-                        st.session_state[f"pop_v_{ref_id}"] = True
-                    if st.button("❌ Suppr. Fiche", key=f"btn_a_{ref_id}", use_container_width=True, type="secondary"):
-                        st.session_state[f"pop_a_{ref_id}"] = True
-                
-                if f"pop_v_{ref_id}" in st.session_state and st.session_state[f"pop_v_{ref_id}"]:
-                    with st.form(f"quick_v_{ref_id}"):
-                        st.write("### 💸 Vente rapide")
-                        q_client = st.text_input("Nom du Client :", value="Client Comptoir").strip()
-                        q_vendu = st.number_input("Quantité vendue :", min_value=1, max_value=int(row['Quantité']), step=1)
-                        c_f1, c_f2 = st.columns(2)
-                        if c_f1.form_submit_button("Valider"):
-                            df_p.at[idx, "Quantité"] -= q_vendu
-                            df_p.to_csv(F_PIECES, index=False)
-                            n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", q_vendu, float(row["Prix Achat"]*q_vendu), float(row["Prix Vente"]*q_vendu), q_client]], columns=df_m.columns)
-                            df_m = pd.concat([df_m, n_mouv], ignore_index=True)
-                            df_m.to_csv(F_MOUV, index=False)
-                            st.session_state[f"pop_v_{ref_id}"] = False
-                            st.rerun()
-                        if c_f2.form_submit_button("Fermer"):
-                            st.session_state[f"pop_v_{ref_id}"] = False
-                            st.rerun()
-
-                if f"pop_a_{ref_id}" in st.session_state and st.session_state[f"pop_a_{ref_id}"]:
-                    st.warning(f"Supprimer définitivement la fiche de {ref_id} ?")
-                    cd1, cd2 = st.columns(2)
-                    if cd1.button("Confirmer", key=f"c_del_{ref_id}", type="primary"):
-                        df_p = df_p.drop(idx)
+            # Couleur ou symbole d'alerte si rupture
+            prefix = "⚠️ " if row['Quantité'] <= row['Alerte Min'] else ""
+            
+            col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7, col_r8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 2.5])
+            col_r1.write(f"{prefix}{ref_id}")
+            col_r2.write(row['Désignation'])
+            col_r3.write(row['Catégorie'])
+            col_r4.write(f"{row['Prix Achat']} €")
+            col_r5.write(f"{row['Prix Vente']} €")
+            col_r6.write(f"**{row['Quantité']}**")
+            col_r7.write(str(row['Alerte Min']))
+            
+            # Boutons d'action regroupés sur la même ligne
+            c_btn1, c_btn2 = col_r8.columns(2)
+            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
+                st.session_state[f"pop_v_{ref_id}"] = True
+            if c_btn2.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
+                st.session_state[f"pop_a_{ref_id}"] = True
+            
+            # Affichage des formulaires juste en dessous de la ligne concernée en cas de clic
+            if f"pop_v_{ref_id}" in st.session_state and st.session_state[f"pop_v_{ref_id}"]:
+                with st.form(f"quick_v_{ref_id}"):
+                    st.info(f"Vente rapide pour : {ref_id}")
+                    q_client = st.text_input("Nom du Client :", value="Client Comptoir").strip()
+                    q_vendu = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']), step=1)
+                    cf1, cf2 = st.columns(2)
+                    if cf1.form_submit_button("Valider la vente"):
+                        df_p.at[idx, "Quantité"] -= q_vendu
                         df_p.to_csv(F_PIECES, index=False)
-                        st.session_state[f"pop_a_{ref_id}"] = False
+                        
+                        pa_t = float(row["Prix Achat"] * q_vendu)
+                        pv_t = float(row["Prix Vente"] * q_vendu)
+                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", q_vendu, pa_t, pv_t, q_client]], columns=df_m.columns)
+                        df_m = pd.concat([df_m, n_mouv], ignore_index=True)
+                        df_m.to_csv(F_MOUV, index=False)
+                        
+                        st.session_state[f"pop_v_{ref_id}"] = False
                         st.rerun()
-                    if cd2.button("Retour", key=f"b_del_{ref_id}"):
-                        st.session_state[f"pop_a_{ref_id}"] = False
+                    if cf2.form_submit_button("Fermer"):
+                        st.session_state[f"pop_v_{ref_id}"] = False
                         st.rerun()
+
+            if f"pop_a_{ref_id}" in st.session_state and st.session_state[f"pop_a_{ref_id}"]:
+                st.warning(f"Supprimer définitivement la fiche {ref_id} ?")
+                cd1, cd2 = st.columns(2)
+                if cd1.button("Confirmer", key=f"conf_t_del_{ref_id}", type="primary"):
+                    df_p = df_p.drop(idx)
+                    df_p.to_csv(F_PIECES, index=False)
+                    st.session_state[f"pop_a_{ref_id}"] = False
+                    st.rerun()
+                if cd2.button("Retour", key=f"back_t_del_{ref_id}"):
+                    st.session_state[f"pop_a_{ref_id}"] = False
+                    st.rerun()
+            st.write("---")
     else:
         st.write("Aucun article à afficher.")
 
@@ -151,7 +176,7 @@ with t2:
             pv = col_b.number_input("Prix de vente (€) :", min_value=0.0, value=val_pv)
             sl = col_b.number_input("Seuil alerte min :", min_value=0, value=val_sl)
             
-            if st.form_submit_button("✏️ Modifier" if existe else "➕ Créer"):
+            if st.form_submit_button("✏️ Modifier la pièce" if existe else "➕ Créer la pièce"):
                 if not nm: st.error("Le nom est obligatoire.")
                 else:
                     if existe:
@@ -162,29 +187,12 @@ with t2:
                     st.rerun()
 
 # ---------------------------------------------------------------------
-# ONGLET 3 : JOURNAL DIRECTION DES OPÉRATIONS
+# ONGLET 3 : JOURNAL DES OPÉRATIONS
 # ---------------------------------------------------------------------
 with t3:
-    st.subheader(" Enregistrer une opération complète")
+    st.subheader("Enregistrer une opération complète")
     rf_m = st.text_input("Référence de la pièce :", key="journal_ref").strip().upper()
     if rf_m and not df_p.empty and rf_m in df_p["Référence"].values:
         idx_m = df_p[df_p["Référence"] == rf_m].index
         p_inf = df_p.loc[idx_m]
         st.info(f"📦 Pièce : {p_inf['Désignation']} | Stock : {p_inf['Quantité']} pcs")
-        typ = st.radio("Transaction :", ["💸 Vente Client (Sortie)", "📦 Commande Fournisseur (Entrée)"])
-        tiers = st.text_input("Nom du Client / Fournisseur :").strip()
-        q_m = st.number_input("Quantité :", min_value=1, step=1)
-        
-        if st.button("💾 Valider"):
-            if not tiers: st.error("Le nom du tiers est obligatoire.")
-            else:
-                ok = False
-                pa_t, pv_t = float(p_inf["Prix Achat"] * q_m), float(p_inf["Prix Vente"] * q_m)
-                if "Vente" in typ:
-                    if p_inf['Quantité'] < q_m: st.error("Stock insuffisant !")
-                    else:
-                        df_p.at[idx_m, "Quantité"] -= q_m
-                        ok = True
-                else:
-                    df_p.at[idx_m, "Quantité"] += q_m
-                    ok = True
