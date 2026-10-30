@@ -83,29 +83,30 @@ with t2:
             pv = col_b.number_input("Prix de vente (€) :", min_value=0.0, step=0.5, value=val_pv)
             sl = col_b.number_input("Seuil alerte min :", min_value=0, step=1, value=val_sl)
             
-            if existe:
-                btn_clique = st.form_submit_button("✏️ Modifier la pièce")
-            else:
-                btn_clique = st.form_submit_button("➕ Créer la pièce")
+            texte_btn = "✏️ Modifier la pièce" if existe else "➕ Créer la pièce"
+            btn_clique = st.form_submit_button(texte_btn)
             
             if btn_clique:
                 if not nm:
                     st.error("Le nom de la pièce est obligatoire.")
                 else:
                     if existe:
-                        idx = df_p[df_p["Référence"].astype(str) == rf_gest].index
-                        df_p.at[idx, "Désignation"] = nm
-                        df_p.at[idx, "Catégorie"] = ct
-                        df_p.at[idx, "Prix Achat"] = pa
-                        df_p.at[idx, "Prix Vente"] = pv
-                        df_p.at[idx, "Alerte Min"] = sl
+                        # Modification sécurisée
+                        mask = df_p["Référence"].astype(str) == rf_gest
+                        df_p.loc[mask, "Désignation"] = nm
+                        df_p.loc[mask, "Catégorie"] = ct
+                        df_p.loc[mask, "Prix Achat"] = pa
+                        df_p.loc[mask, "Prix Vente"] = pv
+                        df_p.loc[mask, "Alerte Min"] = sl
                         st.success("La pièce a bien été modifiée !")
                     else:
+                        # Création
                         nouvelle = pd.DataFrame([[rf_gest, nm, ct, pa, pv, qt, sl]], columns=df_p.columns)
                         df_p = pd.concat([df_p, nouvelle], ignore_index=True)
                         st.success("Nouvelle pièce ajoutée au catalogue !")
                         
                     df_p.to_csv(F_PIECES, index=False)
+                    st.json({})  # Force l'actualisation Streamlit sur mobile
                     st.rerun()
 
 # ---------------------------------------------------------------------
@@ -122,15 +123,15 @@ with t3:
             q_m = st.number_input("Quantité :", min_value=1, step=1)
             
             if st.button("Valider"):
-                idx_m = df_p[df_p["Référence"].astype(str) == rf_m].index
+                mask_m = df_p["Référence"].astype(str) == rf_m
                 ok = False
                 if "Vente" in typ:
                     if p_inf['Quantité'] < q_m: st.error("Stock insuffisant !")
                     else:
-                        df_p.at[idx_m, "Quantité"] -= q_m
+                        df_p.loc[mask_m, "Quantité"] -= q_m
                         ok = True
                 else:
-                    df_p.at[idx_m, "Quantité"] += q_m
+                    df_p.loc[mask_m, "Quantité"] += q_m
                     ok = True
                 if ok:
                     df_p.to_csv(F_PIECES, index=False)
