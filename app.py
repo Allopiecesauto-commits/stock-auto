@@ -3,168 +3,172 @@ import pandas as pd
 from datetime import datetime
 import os
 
-st.set_page_config(page_title="Stock Auto", page_icon="🚗", layout="wide")
+st.set_page_config(page_title="Stock", layout="wide")
 
 F_PIECES, F_MOUV = "web_pieces.csv", "web_mouvements.csv"
 
-def charger_donnees():
-    cols_pieces = ["Référence", "Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Quantité", "Alerte Min"]
-    cols_mouv = ["Date", "Référence", "Désignation", "Type", "Quantité", "Prix Achat Total", "Prix Vente Total", "Tiers", "Paiement"]
-    
-    if not os.path.exists(F_PIECES):
-        pd.DataFrame(columns=cols_pieces).to_csv(F_PIECES, index=False)
-    if not os.path.exists(F_MOUV):
-        pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
-        
-    df = pd.read_csv(F_PIECES)
-    df_m = pd.read_csv(F_MOUV)
-    
-    df["Référence"] = df["Référence"].astype(str).str.upper().str.strip()
-    df["Désignation"] = df["Désignation"].fillna("").astype(str)
-    df["Catégorie"] = df["Catégorie"].fillna("").astype(str)
-    df["Prix Achat"] = pd.to_numeric(df["Prix Achat"], errors='coerce').fillna(0.0).astype(float)
-    df["Prix Vente"] = pd.to_numeric(df["Prix Vente"], errors='coerce').fillna(0.0).astype(float)
-    df["Quantité"] = pd.to_numeric(df["Quantité"], errors='coerce').fillna(0).astype(int)
-    df["Alerte Min"] = pd.to_numeric(df["Alerte Min"], errors='coerce').fillna(0).astype(int)
-    
-    return df, df_m
+# Initialisation des fichiers
+if not os.path.exists(F_PIECES):
+    pd.DataFrame(columns=["Référence", "Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Quantité", "Alerte Min"]).to_csv(F_PIECES, index=False)
+if not os.path.exists(F_MOUV):
+    pd.DataFrame(columns=["Date", "Référence", "Type", "Quantité", "Total Achat", "Total Vente", "Tiers", "Paiement"]).to_csv(F_MOUV, index=False)
 
-df_p, df_m = charger_donnees()
+df_p = pd.read_csv(F_PIECES)
+df_m = pd.read_csv(F_MOUV)
 
-st.title("🚗 Stock Auto Privé")
+st.title("🚗 Gestion de Stock")
 
-t1, t2, t3, t4, t5 = st.tabs(["📊 Accueil & Recherche", "📦 Ajouter / Modifier", "📥 Commande Fournisseur", "📤 Retour Fournisseur", "📈 Comptabilité & Bilans"])
-
-if "filtre_alerte" not in st.session_state:
-    st.session_state.filtre_alerte = False
+t1, t2, t3, t4, t5 = st.tabs(["📊 Accueil & Stock", "📦 Ajouter / Modifier", "📥 Commande Fournisseur", "📤 Retour Fournisseur", "📈 Bilans & Caisse"])
 
 # ---------------------------------------------------------------------
-# ONGLET 1 : ACCUEIL
+# ONGLET 1 : ACCUEIL & RECHERCHE (TABLEAU SIMPLE)
 # ---------------------------------------------------------------------
 with t1:
-    alt_df = df_p[df_p["Quantité"] <= df_p["Alerte Min"]] if not df_p.empty else pd.DataFrame()
-    nb_alt = len(alt_df)
+    st.subheader("Liste du stock en magasin")
+    recherche = st.text_input("Saisir un nom ou une référence pour chercher :").strip().upper()
     
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button(f"📋 Total Références : {len(df_p)}", use_container_width=True, key="btn_tot_ref"):
-            st.session_state.filtre_alerte = False
-            st.rerun()
-    with c2:
-        if st.button(f"⚠️ Alertes rupture : {nb_alt}", use_container_width=True, type="primary" if nb_alt > 0 else "secondary", key="btn_alt_ruf"):
-            st.session_state.filtre_alerte = True
-            st.rerun()
-
-    df_affichage = alt_df if st.session_state.filtre_alerte else df_p
-
-    if st.session_state.filtre_alerte:
-        st.warning("🚨 Affichage des pièces en alerte rupture uniquement")
-
-    req = st.text_input("Rechercher (Réf ou Nom) :", key="search_bar").strip().upper()
-    if req and not df_affichage.empty:
-        df_affichage = df_affichage[df_affichage["Référence"].str.contains(req, na=False) | df_affichage["Désignation"].str.upper().str.contains(req, na=False)]
-
-    if not df_affichage.empty:
-        st.write("---")
-        col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7, col_h8 = st.columns([2, 2.5, 2, 1.2, 1.2, 1, 1, 4])
-        col_h1.markdown("**Référence**")
-        col_h2.markdown("**Désignation**")
-        col_h3.markdown("**Catégorie**")
-        col_h4.markdown("**P. Achat**")
-        col_h5.markdown("**P. Vente**")
-        col_h6.markdown("**Stock**")
-        col_h7.markdown("**Seuil**")
-        col_h8.markdown("**Actions**")
-        st.write("---")
-
-        for idx, row in df_affichage.iterrows():
-            ref_id = row['Référence']
-            prefix = "⚠️ " if row['Quantité'] <= row['Alerte Min'] else ""
-            
-            col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7, col_r8 = st.columns([2, 2.5, 2, 1.2, 1.2, 1, 1, 4])
-            col_r1.write(f"{prefix}{ref_id}")
-            col_r2.write(row['Désignation'])
-            col_r3.write(row['Catégorie'])
-            col_r4.write(f"{row['Prix Achat']} €")
-            col_r5.write(f"{row['Prix Vente']} €")
-            col_r6.write(f"**{row['Quantité']}**")
-            col_r7.write(str(row['Alerte Min']))
-            
-            c_btn1, c_btn2, c_btn3, c_btn4 = col_r8.columns(4)
-            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
-                st.session_state[f"pop_v_{ref_id}"] = not st.session_state.get(f"pop_v_{ref_id}", False)
-                st.session_state[f"pop_e_{ref_id}"] = False
-                st.session_state[f"pop_ret_{ref_id}"] = False
-            if c_btn2.button("📥", key=f"btn_t_e_{ref_id}", help="Livraison Fournisseur"):
-                st.session_state[f"pop_e_{ref_id}"] = not st.session_state.get(f"pop_e_{ref_id}", False)
-                st.session_state[f"pop_v_{ref_id}"] = False
-                st.session_state[f"pop_ret_{ref_id}"] = False
-            if c_btn3.button("📤", key=f"btn_t_r_{ref_id}", help="Retour Marchandise"):
-                st.session_state[f"pop_ret_{ref_id}"] = not st.session_state.get(f"pop_ret_{ref_id}", False)
-                st.session_state[f"pop_v_{ref_id}"] = False
-                st.session_state[f"pop_e_{ref_id}"] = False
-            if c_btn4.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
-                st.session_state[f"pop_a_{ref_id}"] = not st.session_state.get(f"pop_a_{ref_id}", False)
-            
-            if st.session_state.get(f"pop_v_{ref_id}", False):
-                st.info(f"💸 Vente rapide pour : {ref_id}")
-                q_client = st.text_input("Nom du Client :", value="Client Comptoir", key=f"qc_{ref_id}").strip()
-                q_vendu = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']) if int(row['Quantité']) > 0 else 1, step=1, key=f"qv_{ref_id}")
-                q_paye = st.radio("Mode de règlement :", ["💵 Espèces", "💳 Carte Bancaire"], horizontal=True, key=f"qp_{ref_id}")
-                if st.button("Confirmer la vente", key=f"conf_v_action_{ref_id}", type="primary"):
-                    if row['Quantité'] < q_vendu:
-                        st.error("Stock insuffisant !")
-                    else:
-                        df_p.at[idx, "Quantité"] -= q_vendu
-                        df_p.to_csv(F_PIECES, index=False)
-                        pa_t = float(row["Prix Achat"] * q_vendu)
-                        pv_t = float(row["Prix Vente"] * q_vendu)
-                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
-                        df_m = pd.concat([df_m, n_mouv], ignore_index=True)
-                        df_m.to_csv(F_MOUV, index=False)
-                        st.session_state[f"pop_v_{ref_id}"] = False
-                        st.rerun()
-
-            if st.session_state.get(f"pop_e_{ref_id}", False):
-                st.success(f"📦 Arrivage fournisseur pour : {ref_id}")
-                q_fourn = st.text_input("Nom du Fournisseur :", value="Fournisseur", key=f"qf_{ref_id}").strip()
-                q_recu = st.number_input("Quantité de pièces reçues :", min_value=1, step=1, value=1, key=f"qr_{ref_id}")
-                if st.button("Confirmer l'entrée stock", key=f"conf_e_action_{ref_id}", type="primary"):
-                    df_p.at[idx, "Quantité"] += q_recu
-                    df_p.to_csv(F_PIECES, index=False)
-                    pa_t = float(row["Prix Achat"] * q_recu)
-                    n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "📦 Commande Fournisseur (Entrée)", int(q_recu), float(pa_t), 0.0, str(q_fourn), "Fournisseur"]], columns=df_m.columns)
-                    df_m = pd.concat([df_m, n_mouv], ignore_index=True)
-                    df_m.to_csv(F_MOUV, index=False)
-                    st.session_state[f"pop_e_{ref_id}"] = False
-                    st.rerun()
-
-            if st.session_state.get(f"pop_ret_{ref_id}", False):
-                st.warning(f"📤 Enregistrer un retour marchandise pour : {ref_id}")
-                r_fourn = st.text_input("Nom du Fournisseur concerné :", value="Fournisseur", key=f"rfourn_{ref_id}").strip()
-                r_qte = st.number_input("Quantité à renvoyer :", min_value=1, max_value=int(row['Quantité']) if int(row['Quantité']) > 0 else 1, step=1, key=f"rqte_{ref_id}")
-                r_prix = st.number_input("Prix d'achat unitaire remboursé (€) :", min_value=0.0, value=float(row['Prix Achat']), step=0.5, key=f"rprix_{ref_id}")
-                if st.button("Confirmer le Retour Marchandise", key=f"conf_r_action_{ref_id}", type="primary"):
-                    if row['Quantité'] < r_qte:
-                        st.error("Impossible de renvoyer plus de pièces !")
-                    else:
-                        df_p.at[idx, "Quantité"] -= r_qte
-                        df_p.to_csv(F_PIECES, index=False)
-                        valeur_remboursee = float(r_prix * r_qte)
-                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "📤 Retour Fournisseur (Remboursement)", int(r_qte), valeur_remboursee, 0.0, str(r_fourn), "Retour Stock"]], columns=df_m.columns)
-                        df_m = pd.concat([df_m, n_mouv], ignore_index=True)
-                        df_m.to_csv(F_MOUV, index=False)
-                        st.session_state[f"pop_ret_{ref_id}"] = False
-                        st.rerun()
-
-            if st.session_state.get(f"pop_a_{ref_id}", False):
-                st.warning(f"Supprimer la fiche {ref_id} ?")
-                if st.button("Confirmer la suppression", key=f"conf_t_del_{ref_id}", type="primary"):
-                    df_p = df_p.drop(idx)
-                    df_p.to_csv(F_PIECES, index=False)
-                    st.session_state[f"pop_a_{ref_id}"] = False
-                    st.rerun()
-            st.write("---")
+    if not df_p.empty:
+        if recherche:
+            df_filtre = df_p[df_p["Référence"].astype(str).str.contains(recherche, na=False) | df_p["Désignation"].astype(str).str.upper().str.contains(recherche, na=False)]
+            st.dataframe(df_filtre, use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(df_p, use_container_width=True, hide_index=True)
     else:
-        st.write("Aucun article à afficher.")
+        st.info("Le catalogue est vide pour le moment.")
 
+# ---------------------------------------------------------------------
+# ONGLET 2 : AJOUTER OU MODIFIER UNE FICHE
+# ---------------------------------------------------------------------
+with t2:
+    st.subheader("📦 Créer ou Modifier une pièce")
+    ref_add = st.text_input("Référence unique (Ex: 70AH) :", key="r_add").strip().upper()
+    nom_add = st.text_input("Nom / Désignation de la pièce :", key="n_add").strip()
+    cat_add = st.text_input("Catégorie (Ex: Batterie) :", key="c_add").strip()
+    pa_add = st.number_input("Prix d'achat unitaire (€) :", min_value=0.0, step=0.5, key="pa_add")
+    pv_add = st.number_input("Prix de vente unitaire (€) :", min_value=0.0, step=0.5, key="pv_add")
+    stock_add = st.number_input("Stock de départ (Uniquement pour une création) :", min_value=0, step=1, key="s_add")
+    seuil_add = st.number_input("Seuil d'alerte minimum :", min_value=0, step=1, key="seuil_add")
+    
+    if st.button("💾 Enregistrer la pièce dans le catalogue", type="primary", use_container_width=True):
+        if not ref_add or not nom_add:
+            st.error("La Référence et le Nom sont obligatoires.")
+        else:
+            # Si la pièce existe déjà, on la modifie
+            if ref_add in df_p["Référence"].astype(str).values:
+                df_p.loc[df_p["Référence"] == ref_add, ["Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Alerte Min"]] = [nom_add, cat_add, pa_add, pv_add, seuil_add]
+                st.success("Modifications enregistrées !")
+            # Sinon on la crée
+            else:
+                nouvelle_ligne = pd.DataFrame([[ref_add, nom_add, cat_add, pa_add, pv_add, stock_add, seuil_add]], columns=df_p.columns)
+                df_p = pd.concat([df_p, nouvelle_ligne], ignore_index=True)
+                st.success("Nouvelle pièce ajoutée au catalogue !")
+            df_p.to_csv(F_PIECES, index=False)
+            st.rerun()
+
+# ---------------------------------------------------------------------
+# ONGLET 3 : ENREGISTRER UNE VENTE OU UNE LIVRAISON
+# ---------------------------------------------------------------------
+with t3:
+    st.subheader("📥 Enregistrer une Vente ou une Entrée Fournisseur")
+    ref_mouv = st.text_input("Référence de la pièce concernée :", key="r_mouv").strip().upper()
+    nom_tiers = st.text_input("Nom du Client ou du Fournisseur :", key="t_mouv").strip()
+    qte_mouv = st.number_input("Quantité de pièces :", min_value=1, step=1, value=1, key="q_mouv")
+    mode_reglement = st.radio("Mode de règlement (Pour les ventes uniquement) :", ["💵 Espèces", "💳 Carte Bancaire"], horizontal=True)
+    
+    col_v, col_a = st.columns(2)
+    
+    # Bouton VENTE
+    if col_v.button("💸 Valider la Vente (Sortie de stock)", use_container_width=True):
+        if not ref_mouv or not nom_tiers:
+            st.error("Veuillez remplir la référence et le nom du client.")
+        elif ref_mouv not in df_p["Référence"].astype(str).values:
+            st.error("Cette référence n'existe pas. Créez-la d'abord dans l'onglet Ajouter.")
+        else:
+            idx = df_p[df_p["Référence"] == ref_mouv].index[0]
+            stock_actuel = int(df_p.at[idx, "Quantité"])
+            if stock_actuel < qte_mouv:
+                st.error(f"Stock insuffisant ! Il ne reste que {stock_actuel} pièces.")
+            else:
+                df_p.at[idx, "Quantité"] -= qte_mouv
+                df_p.to_csv(F_PIECES, index=False)
+                
+                pa_t = float(df_p.at[idx, "Prix Achat"] * qte_mouv)
+                pv_t = float(df_p.at[idx, "Prix Vente"] * qte_mouv)
+                
+                nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_mouv, "Vente", int(qte_mouv), pa_t, pv_t, nom_tiers, mode_reglement]], columns=df_m.columns)
+                pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
+                st.success("Vente enregistrée avec succès !")
+                st.rerun()
+
+    # Bouton LIVRAISON FOURNISSEUR
+    if col_a.button("📦 Valider la Livraison (Entrée de stock)", use_container_width=True):
+        if not ref_mouv or not nom_tiers:
+            st.error("Veuillez remplir la référence et le nom du fournisseur.")
+        elif ref_mouv not in df_p["Référence"].astype(str).values:
+            st.error("Cette référence n'existe pas. Créez-la d'abord dans l'onglet Ajouter.")
+        else:
+            idx = df_p[df_p["Référence"] == ref_mouv].index[0]
+            df_p.at[idx, "Quantité"] += qte_mouv
+            df_p.to_csv(F_PIECES, index=False)
+            
+            pa_t = float(df_p.at[idx, "Prix Achat"] * qte_mouv)
+            
+            nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_mouv, "Livraison", int(qte_mouv), pa_t, 0.0, nom_tiers, "Fournisseur"]], columns=df_m.columns)
+            pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
+            st.success("Livraison fournisseur enregistrée !")
+            st.rerun()
+
+# ---------------------------------------------------------------------
+# ONGLET 4 : RETOUR FOURNISSEUR
+# ---------------------------------------------------------------------
+with t4:
+    st.subheader("📤 Formulaire de Retour Marchandise")
+    ref_ret = st.text_input("Référence de la pièce à renvoyer :", key="r_ret").strip().upper()
+    fourn_ret = st.text_input("Nom du Fournisseur :", key="f_ret").strip()
+    qte_ret = st.number_input("Quantité à retourner :", min_value=1, step=1, value=1, key="q_ret")
+    prix_ret = st.number_input("Prix d'achat unitaire remboursé par le fournisseur (€) :", min_value=0.0, step=0.5, key="p_ret")
+    
+    if st.button("📤 Valider le Retour au fournisseur", type="primary", use_container_width=True):
+        if not ref_ret or not fourn_ret:
+            st.error("Veuillez remplir la référence et le nom du fournisseur.")
+        elif ref_ret not in df_p["Référence"].astype(str).values:
+            st.error("Cette référence n'existe pas dans le système.")
+        else:
+            idx = df_p[df_p["Référence"] == ref_ret].index[0]
+            stock_actuel = int(df_p.at[idx, "Quantité"])
+            if stock_actuel < qte_ret:
+                st.error(f"Stock insuffisant en magasin ! Vous n'avez que {stock_actuel} pièces.")
+            else:
+                df_p.at[idx, "Quantité"] -= qte_ret
+                df_p.to_csv(F_PIECES, index=False)
+                
+                total_rembourse = float(prix_ret * qte_ret)
+                nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_ret, "Retour", int(qte_ret), total_rembourse, 0.0, fourn_ret, "Remboursement"]], columns=df_m.columns)
+                pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
+                st.success("Retour marchandise validé et enregistré !")
+                st.rerun()
+
+# ---------------------------------------------------------------------
+# ONGLET 5 : COMPTABILITÉ & CAISSE (JOUR PAR JOUR DIRECT)
+# ---------------------------------------------------------------------
+with t5:
+    st.subheader("📈 Synthèse de la caisse et des bénéfices")
+    
+    if not df_m.empty:
+        # Tri et préparation des calculs
+        df_m["Quantité"] = pd.to_numeric(df_m["Quantité"], errors='coerce').fillna(0).astype(int)
+        df_m["Total Achat"] = pd.to_numeric(df_m["Total Achat"], errors='coerce').fillna(0.0).astype(float)
+        df_m["Total Vente"] = pd.to_numeric(df_m["Total Vente"], errors='coerce').fillna(0.0).astype(float)
+        
+        # Séparation Espèces / CB / Retours
+        df_m["Caisse_Especes"] = df_m.apply(lambda r: r["Total Vente"] if "Espèces" in str(r["Paiement"]) else 0.0, axis=1)
+        df_m["Caisse_CB"] = df_m.apply(lambda r: r["Total Vente"] if "Carte" in str(r["Paiement"]) else 0.0, axis=1)
+        df_m["Retours_Fourn"] = df_m.apply(lambda r: r["Total Achat"] if "Retour" in str(r["Type"]) else 0.0, axis=1)
+        df_m["Cout_Ventes"] = df_m.apply(lambda r: r["Total Achat"] if "Vente" in str(r["Type"]) else 0.0, axis=1)
+        
+        # Regroupement par jour
+        bilan = df_m.groupby("Date").agg(
+            Pieces_Vendues=("Quantité", lambda s: df_m.loc[s.index, "Quantité"][df_m["Type"] == "Vente"].sum()),
+            Total_Espèces=("Caisse_Especes", "sum"),
+            Total_CB=("Caisse_CB", "sum"),
+            Remboursements_Retours=("Retours_Fourn", "sum"),
