@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 import os
 
-st.set_page_config(page_title="Stock", layout="wide")
+st.set_page_config(page_title="Stock Auto", layout="wide")
 
 F_PIECES, F_MOUV = "web_pieces.csv", "web_mouvements.csv"
 
@@ -16,12 +16,12 @@ if not os.path.exists(F_MOUV):
 df_p = pd.read_csv(F_PIECES)
 df_m = pd.read_csv(F_MOUV)
 
-st.title("🚗 Gestion de Stock")
+st.title("🚗 Gestion de Stock Auto")
 
 t1, t2, t3, t4, t5 = st.tabs(["📊 Accueil & Stock", "📦 Ajouter / Modifier", "📥 Commande Fournisseur", "📤 Retour Fournisseur", "📈 Bilans & Caisse"])
 
 # ---------------------------------------------------------------------
-# ONGLET 1 : ACCUEIL & RECHERCHE (TABLEAU SIMPLE)
+# ONGLET 1 : ACCUEIL & RECHERCHE
 # ---------------------------------------------------------------------
 with t1:
     st.subheader("Liste du stock en magasin")
@@ -53,11 +53,9 @@ with t2:
         if not ref_add or not nom_add:
             st.error("La Référence et le Nom sont obligatoires.")
         else:
-            # Si la pièce existe déjà, on la modifie
             if ref_add in df_p["Référence"].astype(str).values:
                 df_p.loc[df_p["Référence"] == ref_add, ["Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Alerte Min"]] = [nom_add, cat_add, pa_add, pv_add, seuil_add]
                 st.success("Modifications enregistrées !")
-            # Sinon on la crée
             else:
                 nouvelle_ligne = pd.DataFrame([[ref_add, nom_add, cat_add, pa_add, pv_add, stock_add, seuil_add]], columns=df_p.columns)
                 df_p = pd.concat([df_p, nouvelle_ligne], ignore_index=True)
@@ -66,7 +64,7 @@ with t2:
             st.rerun()
 
 # ---------------------------------------------------------------------
-# ONGLET 3 : ENREGISTRER UNE VENTE OU UNE LIVRAISON
+# ONGLET 3 : COMMANDE FOURNISSEUR & VENTES
 # ---------------------------------------------------------------------
 with t3:
     st.subheader("📥 Enregistrer une Vente ou une Entrée Fournisseur")
@@ -77,12 +75,11 @@ with t3:
     
     col_v, col_a = st.columns(2)
     
-    # Bouton VENTE
     if col_v.button("💸 Valider la Vente (Sortie de stock)", use_container_width=True):
         if not ref_mouv or not nom_tiers:
             st.error("Veuillez remplir la référence et le nom du client.")
         elif ref_mouv not in df_p["Référence"].astype(str).values:
-            st.error("Cette référence n'existe pas. Créez-la d'abord dans l'onglet Ajouter.")
+            st.error("Cette référence n'existe pas.")
         else:
             idx = df_p[df_p["Référence"] == ref_mouv].index[0]
             stock_actuel = int(df_p.at[idx, "Quantité"])
@@ -96,16 +93,16 @@ with t3:
                 pv_t = float(df_p.at[idx, "Prix Vente"] * qte_mouv)
                 
                 nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_mouv, "Vente", int(qte_mouv), pa_t, pv_t, nom_tiers, mode_reglement]], columns=df_m.columns)
-                pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
+                df_m = pd.concat([df_m, nouvel_hist], ignore_index=True)
+                df_m.to_csv(F_MOUV, index=False)
                 st.success("Vente enregistrée avec succès !")
                 st.rerun()
 
-    # Bouton LIVRAISON FOURNISSEUR
     if col_a.button("📦 Valider la Livraison (Entrée de stock)", use_container_width=True):
         if not ref_mouv or not nom_tiers:
             st.error("Veuillez remplir la référence et le nom du fournisseur.")
         elif ref_mouv not in df_p["Référence"].astype(str).values:
-            st.error("Cette référence n'existe pas. Créez-la d'abord dans l'onglet Ajouter.")
+            st.error("Cette référence n'existe pas.")
         else:
             idx = df_p[df_p["Référence"] == ref_mouv].index[0]
             df_p.at[idx, "Quantité"] += qte_mouv
@@ -114,7 +111,8 @@ with t3:
             pa_t = float(df_p.at[idx, "Prix Achat"] * qte_mouv)
             
             nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_mouv, "Livraison", int(qte_mouv), pa_t, 0.0, nom_tiers, "Fournisseur"]], columns=df_m.columns)
-            pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
+            df_m = pd.concat([df_m, nouvel_hist], ignore_index=True)
+            df_m.to_csv(F_MOUV, index=False)
             st.success("Livraison fournisseur enregistrée !")
             st.rerun()
 
@@ -144,31 +142,42 @@ with t4:
                 
                 total_rembourse = float(prix_ret * qte_ret)
                 nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_ret, "Retour", int(qte_ret), total_rembourse, 0.0, fourn_ret, "Remboursement"]], columns=df_m.columns)
-                pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
+                df_m = pd.concat([df_m, nouvel_hist], ignore_index=True)
+                df_m.to_csv(F_MOUV, index=False)
                 st.success("Retour marchandise validé et enregistré !")
                 st.rerun()
 
 # ---------------------------------------------------------------------
-# ONGLET 5 : COMPTABILITÉ & CAISSE (JOUR PAR JOUR DIRECT)
+# ONGLET 5 : COMPTABILITÉ & CAISSE (JOUR PAR JOUR SIMPLIFIÉ)
 # ---------------------------------------------------------------------
 with t5:
     st.subheader("📈 Synthèse de la caisse et des bénéfices")
     
     if not df_m.empty:
-        # Tri et préparation des calculs
         df_m["Quantité"] = pd.to_numeric(df_m["Quantité"], errors='coerce').fillna(0).astype(int)
         df_m["Total Achat"] = pd.to_numeric(df_m["Total Achat"], errors='coerce').fillna(0.0).astype(float)
         df_m["Total Vente"] = pd.to_numeric(df_m["Total Vente"], errors='coerce').fillna(0.0).astype(float)
         
-        # Séparation Espèces / CB / Retours
-        df_m["Caisse_Especes"] = df_m.apply(lambda r: r["Total Vente"] if "Espèces" in str(r["Paiement"]) else 0.0, axis=1)
-        df_m["Caisse_CB"] = df_m.apply(lambda r: r["Total Vente"] if "Carte" in str(r["Paiement"]) else 0.0, axis=1)
-        df_m["Retours_Fourn"] = df_m.apply(lambda r: r["Total Achat"] if "Retour" in str(r["Type"]) else 0.0, axis=1)
-        df_m["Cout_Ventes"] = df_m.apply(lambda r: r["Total Achat"] if "Vente" in str(r["Type"]) else 0.0, axis=1)
+        # Séparation propre
+        v_esp = df_m[(df_m["Type"] == "Vente") & (df_m["Paiement"] == "💵 Espèces")]
+        v_cb = df_m[(df_m["Type"] == "Vente") & (df_m["Paiement"] == "💳 Carte Bancaire")]
+        ret_fourn = df_m[df_m["Type"] == "Retour"]
+        t_ventes = df_m[df_m["Type"] == "Vente"]
         
-        # Regroupement par jour
-        bilan = df_m.groupby("Date").agg(
-            Pieces_Vendues=("Quantité", lambda s: df_m.loc[s.index, "Quantité"][df_m["Type"] == "Vente"].sum()),
-            Total_Espèces=("Caisse_Especes", "sum"),
-            Total_CB=("Caisse_CB", "sum"),
-            Remboursements_Retours=("Retours_Fourn", "sum"),
+        # Groupements simples
+        ca_esp = v_esp.groupby("Date")["Total Vente"].sum()
+        ca_cb = v_cb.groupby("Date")["Total Vente"].sum()
+        ret_val = ret_fourn.groupby("Date")["Total Achat"].sum()
+        
+        v_qte = t_ventes.groupby("Date")["Quantité"].sum()
+        v_ca = t_ventes.groupby("Date")["Total Vente"].sum()
+        v_pa = t_ventes.groupby("Date")["Total Achat"].sum()
+        
+        # Tableau final fusionné
+        dates_uniques = df_m["Date"].unique()
+        lignes_bilan = []
+        
+        for d in dates_uniques:
+            q_v = int(v_qte.get(d, 0))
+            e_v = float(ca_esp.get(d, 0.0))
+            c_v = float(ca_cb.get(d, 0.0))
