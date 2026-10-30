@@ -146,7 +146,7 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER (SANS BLOCS BRUITS / INCASSABLE MOBILE)
+# ONGLET 2 : AJOUTER OU MODIFIER (BOUTON DE VALIDATION FIXE SÉCURISÉ)
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
@@ -157,7 +157,7 @@ with t2:
     
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        p_row = df_p[df_p["Référence"] == rf_gest].iloc
+        p_row = df_p[df_p["Référence"] == rf_gest].iloc[0]
         st.info(f"🔎 Référence trouvée : {p_row['Désignation']}")
         val_nom = str(p_row["Désignation"])
         val_cat = str(p_row["Catégorie"])
@@ -174,7 +174,7 @@ with t2:
     if existe:
         col_a.write(f"**Stock actuel :** {val_qt} pcs")
         qt = val_qt
-    if not existe:
+    else:
         qt = col_a.number_input("Stock Initial :", min_value=0, value=val_qt, key="input_qt")
         
     pv = col_b.number_input("Prix de vente (€) :", min_value=0.0, value=val_pv, key="input_pv")
@@ -182,10 +182,10 @@ with t2:
     
     st.write("")
     
+    # BOUTONS EN DEHORS DE TOUT BLOC POUR ÊTRE TOUJOURS VISIBLES
     if existe:
-        if st.button("✏️ Enregistrer les modifications", key="btn_mod_secure", type="primary"):
+        if st.button("✏️ Enregistrer les modifications", key="btn_mod_secure", type="primary", use_container_width=True):
             if not nm:
                 st.error("Le nom est obligatoire.")
             else:
                 df_p.loc[df_p["Référence"] == rf_gest, ["Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Alerte Min"]] = [nm, ct, pa, pv, sl]
-                df_p.to_csv(F_PIECES, index=False)
