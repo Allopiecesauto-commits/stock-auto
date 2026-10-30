@@ -25,12 +25,13 @@ st.title("🚗 Gestion de Stock Auto")
 
 t1, t2, t3, t4, t5 = st.tabs(["📊 Accueil & Stock", "📦 Ajouter / Modifier", "📥 Commande Fournisseur", "📤 Retour Fournisseur", "📈 Bilans & Caisse"])
 
-# Initialisation des états d'affichage
+# Initialisation des états d'affichage pour éviter les bugs
 for idx, row in df_p.iterrows():
-    if f"pop_v_{row['Référence']}" not in st.session_state:
-        st.session_state[f"pop_v_{row['Référence']}"] = False
-    if f"pop_a_{row['Référence']}" not in st.session_state:
-        st.session_state[f"pop_a_{row['Référence']}"] = False
+    r_id = row['Référence']
+    if f"pop_v_{r_id}" not in st.session_state:
+        st.session_state[f"pop_v_{r_id}"] = False
+    if f"pop_a_{r_id}" not in st.session_state:
+        st.session_state[f"pop_a_{r_id}"] = False
 
 # ---------------------------------------------------------------------
 # ONGLET 1 : ACCUEIL & RECHERCHE (VENTE COMPTOIR DIRECTE)
@@ -162,7 +163,8 @@ with t3:
                 pa_t = float(df_p.at[idx, "Prix Achat"] * qte_mouv)
                 pv_t = float(df_p.at[idx, "Prix Vente"] * qte_mouv)
                 nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_mouv, "Vente", int(qte_mouv), float(pa_t), float(pv_t), str(nom_tiers), str(mode_reglement)]], columns=df_m.columns)
-                pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
+                df_m = pd.concat([df_m, nouvel_hist], ignore_index=True)
+                df_m.to_csv(F_MOUV, index=False)
                 st.success("Vente enregistrée avec succès !")
                 st.rerun()
 
