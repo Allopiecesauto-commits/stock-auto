@@ -35,21 +35,46 @@ st.title("🚗 Stock Auto Privé")
 
 t1, t2, t3 = st.tabs(["📊 Accueil & Recherche", "📦 Ajouter / Modifier", "🔄 Mouvements"])
 
+# Initialisation de l'état du filtre si non présent
+if "filtre_alerte" not in st.session_state:
+    st.session_state.filtre_alerte = False
+
 # ---------------------------------------------------------------------
 # ONGLET 1 : ACCUEIL
 # ---------------------------------------------------------------------
 with t1:
+    # Calcul des alertes en amont
+    alt_df = df_p[df_p["Quantité"] <= df_p["Alerte Min"]] if not df_p.empty else pd.DataFrame()
+    nb_alt = len(alt_df)
+    
+    # Boutons compteurs cliquables
     c1, c2 = st.columns(2)
-    c1.metric("Total Références", len(df_p))
-    alt = len(df_p[df_p["Quantité"] <= df_p["Alerte Min"]]) if not df_p.empty else 0
-    c2.metric("Alertes rupture", alt)
+    with c1:
+        if st.button(f"📋 Total Références : {len(df_p)}", use_container_width=True):
+            st.session_state.filtre_alerte = False
+            st.rerun()
+    with c2:
+        if st.button(f"⚠️ Alertes rupture : {nb_alt}", use_container_width=True, type="primary" if nb_alt > 0 else "secondary"):
+            st.session_state.filtre_alerte = True
+            st.rerun()
 
+    # Détermination du tableau à afficher (Filtré ou Global)
+    df_affichage = alt_df if st.session_state.filtre_alerte else df_p
+
+    if st.session_state.filtre_alerte:
+        st.warning("🚨 Affichage des pièces en alerte rupture uniquement")
+    else:
+        st.info("💡 Cliquez sur le bouton d'alerte rouge en haut pour filtrer les ruptures")
+
+    # Moteur de recherche (s'applique sur le tableau actuellement affiché)
     req = st.text_input("Rechercher (Réf ou Nom) :").strip().upper()
-    if req and not df_p.empty:
-        res = df_p[df_p["Référence"].str.contains(req, na=False) | df_p["Désignation"].str.upper().str.contains(req, na=False)]
+    if req and not df_affichage.empty:
+        res = df_affichage[df_affichage["Référence"].str.contains(req, na=False) | df_affichage["Désignation"].str.upper().str.contains(req, na=False)]
         st.dataframe(res, use_container_width=True, hide_index=True)
-    elif not df_p.empty:
-        st.dataframe(df_p, use_container_width=True, hide_index=True)
+    elif not df_affichage.empty:
+        st.dataframe(df_affichage, use_container_width=True, hide_index=True)
+    else:
+        st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
 # ONGLET 2 : AJOUTER OU MODIFIER UNE RÉFÉRENCE
@@ -63,7 +88,7 @@ with t2:
     
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        p_info = df_p[df_p["Référence"] == rf_gest].iloc[0]
+        p_info = df_p[df_p["Référence"] == rf_gest].iloc
         st.info(f"🔎 Référence existante trouvée : {p_info['Désignation']}")
     elif rf_gest:
         st.success("✨ Référence inconnue. Mode création activé.")
@@ -100,7 +125,6 @@ with t2:
                     st.error("Le nom de la pièce est obligatoire.")
                 else:
                     if existe:
-                        # Remplacement propre de la ligne complète
                         df_p.loc[df_p["Référence"] == rf_gest, ["Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Alerte Min"]] = [nm, ct, pa, pv, sl]
                         st.success("La pièce a bien été modifiée !")
                     else:
@@ -119,7 +143,7 @@ with t3:
     rf_m = st.text_input("Référence de la pièce :").strip().upper()
     if rf_m:
         if not df_p.empty and rf_m in df_p["Référence"].values:
-            p_inf = df_p[df_p["Référence"] == rf_m].iloc[0]
+            p_inf = df_p[df_p["Référence"] == rf_m].iloc
             st.info(f"Pièce : {p_inf['Désignation']} | Stock actuel : {p_inf['Quantité']}")
             typ = st.radio("Opération :", ["💸 Vente Client (Sortie)", "📦 Arrivée Fournisseur (Entrée)"])
             q_m = st.number_input("Quantité :", min_value=1, step=1)
@@ -130,10 +154,10 @@ with t3:
                 if "Vente" in typ:
                     if p_inf['Quantité'] < q_m: st.error("Stock insuffisant !")
                     else:
-                        df_p.at[idx_m[0], "Quantité"] -= q_m
+                        df_p.at[idx_m, "Quantité"] -= q_m
                         ok = True
                 else:
-                    df_p.at[idx_m[0], "Quantité"] += q_m
+                    df_p.at[idx_m, "Quantité"] += q_m
                     ok = True
                 if ok:
                     df_p.to_csv(F_PIECES, index=False)
