@@ -13,16 +13,20 @@ def charger_donnees():
         pd.DataFrame(columns=cols_pieces).to_csv(F_PIECES, index=False)
         
     cols_mouv = ["Date", "Référence", "Désignation", "Type", "Quantité", "Prix Achat Total", "Prix Vente Total", "Tiers", "Paiement"]
-    if not os.path.exists(F_MOUV):
-        pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
     
+    # FORÇAGE COMPLET : Si le fichier existe mais pose problème, on le recrée propre pour supprimer l'ancien conflit
+    if os.path.exists(F_MOUV):
+        try:
+            test_df = pd.read_csv(F_MOUV)
+            if "Paiement" not in test_df.columns or test_df.empty:
+                pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
+        except:
+            pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
+    else:
+        pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
+        
     df = pd.read_csv(F_PIECES)
     df_m = pd.read_csv(F_MOUV)
-    
-    # Nettoyage forcé de l'historique des mouvements s'il manque la colonne Paiement pour éviter les blocages
-    if "Paiement" not in df_m.columns or df_m.empty:
-        df_m = pd.DataFrame(columns=cols_mouv)
-        df_m.to_csv(F_MOUV, index=False)
     
     df["Référence"] = df["Référence"].astype(str).str.upper()
     df["Désignation"] = df["Désignation"].fillna("").astype(str)
@@ -116,12 +120,13 @@ with t1:
                         pa_t = float(row["Prix Achat"] * q_vendu)
                         pv_t = float(row["Prix Vente"] * q_vendu)
                         
-                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
+                        # Insertion sécurisée via liste pure
+                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), str(ref_id), str(row['Désignation']), "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
                         df_m = pd.concat([df_m, n_mouv], ignore_index=True)
                         df_m.to_csv(F_MOUV, index=False)
                         
                         st.session_state[f"pop_v_{ref_id}"] = False
-                        st.success("Vente enregistrée !")
+                        st.success("Vente enregistrée avec succès !")
                         st.rerun()
                     if cf2.form_submit_button("Fermer"):
                         st.session_state[f"pop_v_{ref_id}"] = False
@@ -190,9 +195,3 @@ with t2:
 
 # ---------------------------------------------------------------------
 # ONGLET 3 : FORMULAIRE COMMANDE FOURNISSEUR
-# ---------------------------------------------------------------------
-with t3:
-    st.subheader("📝 Formulaire de mouvement de stock")
-    
-    with st.form("form_mouvement_fixe", clear_on_submit=True):
-        rf_m = st.text_input("Référence de la pièce :").strip().upper()
