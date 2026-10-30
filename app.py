@@ -14,7 +14,6 @@ def charger_donnees():
         
     cols_mouv = ["Date", "Référence", "Désignation", "Type", "Quantité", "Prix Achat Total", "Prix Vente Total", "Tiers", "Paiement"]
     
-    # FORÇAGE COMPLET : Si le fichier existe mais pose problème, on le recrée propre pour supprimer l'ancien conflit
     if os.path.exists(F_MOUV):
         try:
             test_df = pd.read_csv(F_MOUV)
@@ -120,8 +119,7 @@ with t1:
                         pa_t = float(row["Prix Achat"] * q_vendu)
                         pv_t = float(row["Prix Vente"] * q_vendu)
                         
-                        # Insertion sécurisée via liste pure
-                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), str(ref_id), str(row['Désignation']), "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
+                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
                         df_m = pd.concat([df_m, n_mouv], ignore_index=True)
                         df_m.to_csv(F_MOUV, index=False)
                         
@@ -148,28 +146,29 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER
+# ONGLET 2 : AJOUTER OU MODIFIER (CORRIGÉ SANS ILOC)
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
     rf_gest = st.text_input("Saisir la Référence à gérer :", key="txt_gest_ref").strip().upper()
     existe = False
-    p_info = None
+    
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        p_info = df_p[df_p["Référence"] == rf_gest].iloc
-        st.info(f"🔎 Référence existante : {p_info['Désignation']}")
+        # Cible propre sans iloc
+        ligne_piece = df_p[df_p["Référence"] == rf_gest].index[0]
+        st.info(f"🔎 Référence existante trouvée : {df_p.at[ligne_piece, 'Désignation']}")
     elif rf_gest:
         st.success("✨ Nouvelle référence détectée.")
 
     if rf_gest:
         with st.form("f_add_edit", clear_on_submit=not existe):
-            val_nom = str(p_info["Désignation"]) if existe else ""
-            val_cat = str(p_info["Catégorie"]) if existe else ""
-            val_pa = float(p_info["Prix Achat"]) if existe else 0.0
-            val_pv = float(p_info["Prix Vente"]) if existe else 0.0
-            val_qt = int(p_info["Quantité"]) if existe else 0
-            val_sl = int(p_info["Alerte Min"]) if existe else 0
+            val_nom = str(df_p.at[ligne_piece, "Désignation"]) if existe else ""
+            val_cat = str(df_p.at[ligne_piece, "Catégorie"]) if existe else ""
+            val_pa = float(df_p.at[ligne_piece, "Prix Achat"]) if existe else 0.0
+            val_pv = float(df_p.at[ligne_piece, "Prix Vente"]) if existe else 0.0
+            val_qt = int(df_p.at[ligne_piece, "Quantité"]) if existe else 0
+            val_sl = int(df_p.at[ligne_piece, "Alerte Min"]) if existe else 0
             
             nm = st.text_input("Désignation / Nom :", value=val_nom).strip()
             ct = st.text_input("Catégorie :", value=val_cat).strip()
@@ -195,3 +194,5 @@ with t2:
 
 # ---------------------------------------------------------------------
 # ONGLET 3 : FORMULAIRE COMMANDE FOURNISSEUR
+# ---------------------------------------------------------------------
+with t3:
