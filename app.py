@@ -19,11 +19,10 @@ def charger_donnees():
     df = pd.read_csv(F_PIECES)
     df_m = pd.read_csv(F_MOUV)
     
-    # Correction forcée des colonnes du journal des mouvements pour éviter le plantage de structure
-    for col in cols_mouv:
-        if col not in df_m.columns:
-            df_m[col] = "Non spécifié" if col == "Paiement" else ""
-            df_m.to_csv(F_MOUV, index=False)
+    # Nettoyage forcé de l'historique des mouvements s'il manque la colonne Paiement pour éviter les blocages
+    if "Paiement" not in df_m.columns or df_m.empty:
+        df_m = pd.DataFrame(columns=cols_mouv)
+        df_m.to_csv(F_MOUV, index=False)
     
     df["Référence"] = df["Référence"].astype(str).str.upper()
     df["Désignation"] = df["Désignation"].fillna("").astype(str)
@@ -117,19 +116,8 @@ with t1:
                         pa_t = float(row["Prix Achat"] * q_vendu)
                         pv_t = float(row["Prix Vente"] * q_vendu)
                         
-                        # Ajout en utilisant un dictionnaire pour éviter le bug de correspondance d'index Pandas
-                        nouvel_index = len(df_m)
-                        df_m.loc[nouvel_index] = [
-                            datetime.now().strftime("%Y-%m-%d"),
-                            ref_id,
-                            row['Désignation'],
-                            "💸 Vente Client (Sortie)",
-                            int(q_vendu),
-                            float(pa_t),
-                            float(pv_t),
-                            str(q_client),
-                            str(q_paye)
-                        ]
+                        n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "💸 Vente Client (Sortie)", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
+                        df_m = pd.concat([df_m, n_mouv], ignore_index=True)
                         df_m.to_csv(F_MOUV, index=False)
                         
                         st.session_state[f"pop_v_{ref_id}"] = False
@@ -201,3 +189,10 @@ with t2:
                     st.rerun()
 
 # ---------------------------------------------------------------------
+# ONGLET 3 : FORMULAIRE COMMANDE FOURNISSEUR
+# ---------------------------------------------------------------------
+with t3:
+    st.subheader("📝 Formulaire de mouvement de stock")
+    
+    with st.form("form_mouvement_fixe", clear_on_submit=True):
+        rf_m = st.text_input("Référence de la pièce :").strip().upper()
