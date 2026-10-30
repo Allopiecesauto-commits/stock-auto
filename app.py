@@ -9,19 +9,29 @@ F_PIECES, F_MOUV = "web_pieces.csv", "web_mouvements.csv"
 
 def charger_donnees():
     cols_pieces = ["Référence", "Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Quantité", "Alerte Min"]
-    if not os.path.exists(F_PIECES):
-        pd.DataFrame(columns=cols_pieces).to_csv(F_PIECES, index=False)
-        
     cols_mouv = ["Date", "Référence", "Désignation", "Type", "Quantité", "Prix Achat Total", "Prix Vente Total", "Tiers", "Paiement"]
     
+    # NETTOYAGE FORCÉ DES ANCIENS FICHIERS DE TEST CORROMPUS
+    if os.path.exists(F_PIECES):
+        try:
+            test_p = pd.read_csv(F_PIECES)
+            if "Référence" not in test_p.columns:
+                os.remove(F_PIECES)
+        except:
+            os.remove(F_PIECES)
+            
     if os.path.exists(F_MOUV):
         try:
-            test_df = pd.read_csv(F_MOUV)
-            if "Paiement" not in test_df.columns or test_df.empty:
-                pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
+            test_m = pd.read_csv(F_MOUV)
+            if "Paiement" not in test_m.columns or "Type" not in test_m.columns:
+                os.remove(F_MOUV)
         except:
-            pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
-    else:
+            os.remove(F_MOUV)
+
+    # Réinitialisation propre si les fichiers ont été supprimés ou n'existent pas
+    if not os.path.exists(F_PIECES):
+        pd.DataFrame(columns=cols_pieces).to_csv(F_PIECES, index=False)
+    if not os.path.exists(F_MOUV):
         pd.DataFrame(columns=cols_mouv).to_csv(F_MOUV, index=False)
         
     df = pd.read_csv(F_PIECES)
@@ -100,13 +110,13 @@ with t1:
             col_r7.write(str(row['Alerte Min']))
             
             c_btn1, c_btn2, c_btn3 = col_r8.columns(3)
-            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
+            if c_btn1.button("💸", key=f"btn_t_v_{ref_id}"):
                 st.session_state[f"pop_v_{ref_id}"] = True
                 st.session_state[f"pop_e_{ref_id}"] = False
-            if c_btn2.button("📦", key=f"btn_t_e_{ref_id}", help="Ajouter du Stock (Fournisseur)"):
+            if c_btn2.button("📦", key=f"btn_t_e_{ref_id}"):
                 st.session_state[f"pop_e_{ref_id}"] = True
                 st.session_state[f"pop_v_{ref_id}"] = False
-            if c_btn3.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
+            if c_btn3.button("❌", key=f"btn_t_a_{ref_id}"):
                 st.session_state[f"pop_a_{ref_id}"] = True
             
             if f"pop_v_{ref_id}" in st.session_state and st.session_state[f"pop_v_{ref_id}"]:
@@ -153,7 +163,7 @@ with t1:
                         st.rerun()
 
             if f"pop_a_{ref_id}" in st.session_state and st.session_state[f"pop_a_{ref_id}"]:
-                st.warning(f"Supprimer définitivement la fiche {ref_id} ?")
+                st.warning(f"Supprimer la fiche {ref_id} ?")
                 cd1, cd2 = st.columns(2)
                 if cd1.button("Confirmer", key=f"conf_t_del_{ref_id}", type="primary"):
                     df_p = df_p.drop(idx)
@@ -168,7 +178,7 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER (RÉPARÉ INDÉSTRUCTIBLE)
+# ONGLET 2 : AJOUTER OU MODIFIER
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
@@ -179,13 +189,9 @@ with t2:
     
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        # Extraction de la ligne de données en mode dictionnaire pur pour éliminer le bug d'index mobile
-        match_rows = df_p[df_p["Référence"] == rf_gest]
-        if not match_rows.empty:
-            p_row = match_rows.iloc[0]
-            st.info(f"🔎 Référence existante trouvée : {p_row['Désignation']}")
-            val_nom = str(p_row["Désignation"])
-            val_cat = str(p_row["Catégorie"])
-            val_pa = float(p_row["Prix Achat"])
-            val_pv = float(p_row["Prix Vente"])
-            val_qt = int(p_row["Quantité"])
+        p_row = df_p[df_p["Référence"] == rf_gest].iloc[0] # REPARÉ : Extraction forcée en ligne pure unique
+        st.info(f"🔎 Référence trouvée : {p_row['Désignation']}")
+        val_nom = str(p_row["Désignation"])
+        val_cat = str(p_row["Catégorie"])
+        val_pa = float(p_row["Prix Achat"])
+        val_pv = float(p_row["Prix Vente"])
