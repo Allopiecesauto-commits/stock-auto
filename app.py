@@ -99,7 +99,6 @@ with t1:
             col_r6.write(f"**{row['Quantité']}**")
             col_r7.write(str(row['Alerte Min']))
             
-            # 3 Boutons d'action rapides sur mobile
             c_btn1, c_btn2, c_btn3 = col_r8.columns(3)
             if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
                 st.session_state[f"pop_v_{ref_id}"] = True
@@ -110,7 +109,6 @@ with t1:
             if c_btn3.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
                 st.session_state[f"pop_a_{ref_id}"] = True
             
-            # Action de VENTE RAPIDE
             if f"pop_v_{ref_id}" in st.session_state and st.session_state[f"pop_v_{ref_id}"]:
                 with st.form(f"quick_v_{ref_id}"):
                     st.info(f"💸 Vente rapide pour : {ref_id}")
@@ -135,7 +133,6 @@ with t1:
                         st.session_state[f"pop_v_{ref_id}"] = False
                         st.rerun()
 
-            # NOUVELLE ACTION : ENTRÉE DE STOCK EN DIRECT DEPUIS L'ACCUEIL
             if f"pop_e_{ref_id}" in st.session_state and st.session_state[f"pop_e_{ref_id}"]:
                 with st.form(f"quick_e_{ref_id}"):
                     st.success(f"📦 Arrivage fournisseur pour : {ref_id}")
@@ -145,12 +142,10 @@ with t1:
                     if ce1.form_submit_button("Valider l'entrée"):
                         df_p.at[idx, "Quantité"] += q_recu
                         df_p.to_csv(F_PIECES, index=False)
-                        
                         pa_t = float(row["Prix Achat"] * q_recu)
                         n_mouv = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], "📦 Commande Fournisseur (Entrée)", int(q_recu), float(pa_t), 0.0, str(q_fourn), "Fournisseur"]], columns=df_m.columns)
                         df_m = pd.concat([df_m, n_mouv], ignore_index=True)
                         df_m.to_csv(F_MOUV, index=False)
-                        
                         st.session_state[f"pop_e_{ref_id}"] = False
                         st.rerun()
                     if ce2.form_submit_button("Fermer"):
@@ -173,21 +168,24 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER
+# ONGLET 2 : AJOUTER OU MODIFIER (RÉPARÉ INDÉSTRUCTIBLE)
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
     rf_gest = st.text_input("Saisir la Référence à gérer :", key="txt_gest_ref").strip().upper()
     existe = False
+    
     val_nom, val_cat, val_pa, val_pv, val_qt, val_sl = "", "", 0.0, 0.0, 0, 0
     
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        p_row = df_p[df_p["Référence"] == rf_gest].iloc
-        st.info(f"🔎 Référence existante trouvée : {p_row['Désignation']}")
-        val_nom = str(p_row["Désignation"])
-        val_cat = str(p_row["Catégorie"])
-        val_pa = float(p_row["Prix Achat"])
-        val_pv = float(p_row["Prix Vente"])
-        val_qt = int(p_row["Quantité"])
-        val_sl = int(p_row["Alerte Min"])
+        # Extraction de la ligne de données en mode dictionnaire pur pour éliminer le bug d'index mobile
+        match_rows = df_p[df_p["Référence"] == rf_gest]
+        if not match_rows.empty:
+            p_row = match_rows.iloc[0]
+            st.info(f"🔎 Référence existante trouvée : {p_row['Désignation']}")
+            val_nom = str(p_row["Désignation"])
+            val_cat = str(p_row["Catégorie"])
+            val_pa = float(p_row["Prix Achat"])
+            val_pv = float(p_row["Prix Vente"])
+            val_qt = int(p_row["Quantité"])
