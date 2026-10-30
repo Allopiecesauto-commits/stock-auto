@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime
 import os
 
-st.set_page_config(page_title="Stock Auto", page_icon="🚗", layout="wide") # Passage en mode large pour le tableau
+st.set_page_config(page_title="Stock Auto", page_icon="🚗", layout="wide")
 
 F_PIECES, F_MOUV = "web_pieces.csv", "web_mouvements.csv"
 
@@ -33,13 +33,13 @@ df_p, df_m = charger_donnees()
 
 st.title("🚗 Stock Auto Privé")
 
-t1, t2, t3, t4 = st.tabs(["📊 Accueil & Recherche", "📦 Ajouter / Modifier", "🔄 Journal Ventes & Fournisseurs", "📈 Comptabilité & Bilans"])
+t1, t2, t3, t4 = st.tabs(["📊 Accueil & Recherche", "📦 Ajouter / Modifier", "🔄 Ventes & Entrées", "📈 Comptabilité & Bilans"])
 
 if "filtre_alerte" not in st.session_state:
     st.session_state.filtre_alerte = False
 
 # ---------------------------------------------------------------------
-# ONGLET 1 : ACCUEIL (AFFICHAGE EN LIGNE / TABLEAU DYNAMIQUE)
+# ONGLET 1 : ACCUEIL
 # ---------------------------------------------------------------------
 with t1:
     alt_df = df_p[df_p["Quantité"] <= df_p["Alerte Min"]] if not df_p.empty else pd.DataFrame()
@@ -67,7 +67,6 @@ with t1:
     if not df_affichage.empty:
         st.write("---")
         
-        # En-tête des colonnes du tableau
         col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7, col_h8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 2.5])
         col_h1.markdown("**Référence**")
         col_h2.markdown("**Désignation**")
@@ -79,11 +78,8 @@ with t1:
         col_h8.markdown("**Actions**")
         st.write("---")
 
-        # Lignes du tableau
         for idx, row in df_affichage.iterrows():
             ref_id = row['Référence']
-            
-            # Couleur ou symbole d'alerte si rupture
             prefix = "⚠️ " if row['Quantité'] <= row['Alerte Min'] else ""
             
             col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7, col_r8 = st.columns([2, 3, 2, 1.5, 1.5, 1.2, 1.2, 2.5])
@@ -95,14 +91,12 @@ with t1:
             col_r6.write(f"**{row['Quantité']}**")
             col_r7.write(str(row['Alerte Min']))
             
-            # Boutons d'action regroupés sur la même ligne
             c_btn1, c_btn2 = col_r8.columns(2)
             if c_btn1.button("💸", key=f"btn_t_v_{ref_id}", help="Vendre"):
                 st.session_state[f"pop_v_{ref_id}"] = True
             if c_btn2.button("❌", key=f"btn_t_a_{ref_id}", help="Supprimer la fiche"):
                 st.session_state[f"pop_a_{ref_id}"] = True
             
-            # Affichage des formulaires juste en dessous de la ligne concernée en cas de clic
             if f"pop_v_{ref_id}" in st.session_state and st.session_state[f"pop_v_{ref_id}"]:
                 with st.form(f"quick_v_{ref_id}"):
                     st.info(f"Vente rapide pour : {ref_id}")
@@ -145,7 +139,7 @@ with t1:
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
-    rf_gest = st.text_input("Saisir la Référence à gérer :").strip().upper()
+    rf_gest = st.text_input("Saisir la Référence à gérer :", key="txt_gest_ref").strip().upper()
     existe = False
     p_info = None
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
@@ -187,12 +181,18 @@ with t2:
                     st.rerun()
 
 # ---------------------------------------------------------------------
-# ONGLET 3 : JOURNAL DES OPÉRATIONS
+# ONGLET 3 : ENREGISTRER UNE VENTE OU UNE ENTRÉE (FORMULAIRE FIXE SIMPLE)
 # ---------------------------------------------------------------------
 with t3:
-    st.subheader("Enregistrer une opération complète")
-    rf_m = st.text_input("Référence de la pièce :", key="journal_ref").strip().upper()
-    if rf_m and not df_p.empty and rf_m in df_p["Référence"].values:
-        idx_m = df_p[df_p["Référence"] == rf_m].index
-        p_inf = df_p.loc[idx_m]
-        st.info(f"📦 Pièce : {p_inf['Désignation']} | Stock : {p_inf['Quantité']} pcs")
+    st.subheader("📝 Formulaire de mouvement de stock")
+    st.write("Saisissez les informations de la transaction ci-dessous :")
+    
+    with st.form("form_mouvement_fixe", clear_on_submit=True):
+        rf_m = st.text_input("Référence de la pièce :").strip().upper()
+        tiers = st.text_input("Nom du Tiers (Client ou Fournisseur) :").strip()
+        q_m = st.number_input("Quantité de pièces :", min_value=1, step=1, value=1)
+        
+        col_b1, col_b2 = st.columns(2)
+        btn_vente = col_b1.form_submit_button("💸 Valider la Vente (Sortie)", use_container_width=True)
+        btn_achat = col_b2.form_submit_button("📦 Valider l'Arrivage Fournisseur (Entrée)", use_container_width=True)
+        
