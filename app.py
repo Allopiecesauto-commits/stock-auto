@@ -146,30 +146,32 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER (CORRIGÉ SANS ILOC)
+# ONGLET 2 : AJOUTER OU MODIFIER (TOTALEMENT COMPATIBLE MOBILE)
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
     rf_gest = st.text_input("Saisir la Référence à gérer :", key="txt_gest_ref").strip().upper()
     existe = False
     
+    val_nom, val_cat, val_pa, val_pv, val_qt, val_sl = "", "", 0.0, 0.0, 0, 0
+    
     if rf_gest and not df_p.empty and rf_gest in df_p["Référence"].values:
         existe = True
-        # Cible propre sans iloc
-        ligne_piece = df_p[df_p["Référence"] == rf_gest].index[0]
-        st.info(f"🔎 Référence existante trouvée : {df_p.at[ligne_piece, 'Désignation']}")
+        # Récupération sécurisée sous forme de ligne dictionnaire
+        p_row = df_p[df_p["Référence"] == rf_gest].iloc[0]
+        st.info(f"🔎 Référence existante trouvée : {p_row['Désignation']}")
+        
+        val_nom = str(p_row["Désignation"])
+        val_cat = str(p_row["Catégorie"])
+        val_pa = float(p_row["Prix Achat"])
+        val_pv = float(p_row["Prix Vente"])
+        val_qt = int(p_row["Quantité"])
+        val_sl = int(p_row["Alerte Min"])
     elif rf_gest:
         st.success("✨ Nouvelle référence détectée.")
 
     if rf_gest:
         with st.form("f_add_edit", clear_on_submit=not existe):
-            val_nom = str(df_p.at[ligne_piece, "Désignation"]) if existe else ""
-            val_cat = str(df_p.at[ligne_piece, "Catégorie"]) if existe else ""
-            val_pa = float(df_p.at[ligne_piece, "Prix Achat"]) if existe else 0.0
-            val_pv = float(df_p.at[ligne_piece, "Prix Vente"]) if existe else 0.0
-            val_qt = int(df_p.at[ligne_piece, "Quantité"]) if existe else 0
-            val_sl = int(df_p.at[ligne_piece, "Alerte Min"]) if existe else 0
-            
             nm = st.text_input("Désignation / Nom :", value=val_nom).strip()
             ct = st.text_input("Catégorie :", value=val_cat).strip()
             col_a, col_b = st.columns(2)
@@ -195,4 +197,6 @@ with t2:
 # ---------------------------------------------------------------------
 # ONGLET 3 : FORMULAIRE COMMANDE FOURNISSEUR
 # ---------------------------------------------------------------------
-with t3:
+with st.container() if False else t3:
+    st.subheader("📝 Formulaire de mouvement de stock")
+    
