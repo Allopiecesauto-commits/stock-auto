@@ -104,7 +104,7 @@ with t1:
             if st.session_state.get(f"pop_v_{ref_id}", False):
                 st.info(f"💸 Vente rapide pour : {ref_id}")
                 q_client = st.text_input("Nom du Client :", value="Client Comptoir", key=f"qc_{ref_id}").strip()
-                q_vendu = st.number_value = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']) if int(row['Quantité']) > 0 else 1, step=1, key=f"qv_{ref_id}")
+                q_vendu = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']) if int(row['Quantité']) > 0 else 1, step=1, key=f"qv_{ref_id}")
                 q_paye = st.radio("Mode de règlement :", ["💵 Espèces", "💳 Carte Bancaire"], horizontal=True, key=f"qp_{ref_id}")
                 if st.button("Confirmer la vente", key=f"conf_v_action_{ref_id}", type="primary"):
                     if row['Quantité'] < q_vendu:
@@ -146,7 +146,7 @@ with t1:
         st.write("Aucun article à afficher.")
 
 # ---------------------------------------------------------------------
-# ONGLET 2 : AJOUTER OU MODIFIER (SANS FORMULAIRE - PACK MOBILE DIRECT)
+# ONGLET 2 : AJOUTER OU MODIFIER
 # ---------------------------------------------------------------------
 with t2:
     st.subheader("Gestion des fiches articles")
@@ -188,3 +188,5 @@ with t2:
         
         if st.button(texte_bouton, key="main_action_btn", type="primary"):
             if not nm:
+                st.error("Le nom de la pièce est obligatoire.")
+            else:
