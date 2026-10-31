@@ -1,20 +1,24 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 import os
 
 st.set_page_config(page_title="Stock Auto", layout="wide")
 
-F_PIECES = "web_pieces.csv"
+F_PIECES, F_VENTES = "web_pieces.csv", "web_ventes.csv"
 
-# Un seul fichier ultra-simple pour le stock
+# Initialisation des fichiers
 if not os.path.exists(F_PIECES):
     pd.DataFrame(columns=["Référence", "Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Quantité", "Alerte Min"]).to_csv(F_PIECES, index=False)
+if not os.path.exists(F_VENTES):
+    pd.DataFrame(columns=["Date", "Référence", "Désignation", "Quantité", "Total Vente", "Tiers", "Paiement"]).to_csv(F_VENTES, index=False)
 
 df_p = pd.read_csv(F_PIECES)
+df_v = pd.read_csv(F_VENTES)
 
 st.title("🚗 Gestion de Stock Auto")
 
-t1, t2 = st.tabs(["📊 Accueil & Actions rapides", "📦 Créer Nouvelle Fiche"])
+t1, t2, t3 = st.tabs(["📊 Accueil & Actions rapides", "📦 Créer Nouvelle Fiche", "📈 Historique des Ventes"])
 
 # Initialisation des états d'affichage
 for idx, row in df_p.iterrows():
@@ -59,7 +63,7 @@ with t1:
             col_r6.write(f"**{row['Quantité']} pcs**")
             col_r7.write(f"{row['Alerte Min']} pcs")
             
-            if col_r8.button("🛠️ Gérer la pièce", key=f"btn_act_{ref_id}", use_container_width=True):
+            if col_r8.button("🛠️ Gérer / Vendre", key=f"btn_act_{ref_id}", use_container_width=True):
                 st.session_state[f"pop_act_{ref_id}"] = not st.session_state[f"pop_act_{ref_id}"]
                 
             if st.session_state[f"pop_act_{ref_id}"]:
@@ -68,21 +72,40 @@ with t1:
                 c_panel1, c_panel2 = st.columns(2)
                 
                 with c_panel1:
-                    st.markdown("### 📥 Enregistrer une Vente ou Ajuster les prix")
+                    st.markdown("### 💸 Enregistrer une Vente rapide")
+                    q_client = st.text_input("Nom du Client :", value="Client comptoir", key=f"qc_{ref_id}").strip()
+                    q_vendu = st.number_input("Quantité à vendre :", min_value=1, max_value=int(row['Quantité']) if int(row['Quantité']) > 0 else 1, step=1, key=f"qv_{ref_id}")
+                    q_paye = st.radio("Mode de règlement :", ["💵 Espèces", "💳 Carte Bancaire"], horizontal=True, key=f"qp_{ref_id}")
+                    
+                    if st.button("Confirmer la vente", key=f"conf_v_{ref_id}", type="primary", use_container_width=True):
+                        if row['Quantité'] < q_vendu:
+                            st.error("Stock insuffisant !")
+                        else:
+                            df_p.loc[df_p["Référence"] == ref_id, "Quantité"] -= q_vendu
+                            df_p.to_csv(F_PIECES, index=False)
+                            
+                            tot_v = float(row["Prix Vente"] * q_vendu)
+                            nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], int(q_vendu), float(tot_v), str(q_client), str(q_paye)]], columns=df_v.columns)
+                            df_v = pd.concat([df_v, nouvel_hist], ignore_index=True)
+                            df_v.to_csv(F_VENTES, index=False)
+                            
+                            st.session_state[f"pop_act_{ref_id}"] = False
+                            st.success("Vente enregistrée !")
+                            st.rerun()
+                        
+                with c_panel2:
+                    st.markdown("### 📦 Ajuster les prix ou le stock")
                     n_pa = st.number_input("Prix d'Achat unitaire (€) :", min_value=0.0, value=float(row['Prix Achat']), step=0.5, key=f"pa_{ref_id}")
                     n_pv = st.number_input("Prix de Vente unitaire (€) :", min_value=0.0, value=float(row['Prix Vente']), step=0.5, key=f"pv_{ref_id}")
-                    n_qt = st.number_input("Modifier le Stock (Vente ou Arrivage) :", min_value=0, value=int(row['Quantité']), step=1, key=f"qt_{ref_id}")
+                    n_qt = st.number_input("Modifier le Stock (Ajustement) :", min_value=0, value=int(row['Quantité']), step=1, key=f"qt_{ref_id}")
                     
-                    if st.button("💾 Sauvegarder les modifications", key=f"save_edit_{ref_id}", type="primary", use_container_width=True):
+                    if st.button("💾 Sauvegarder les modifications", key=f"save_edit_{ref_id}", use_container_width=True):
                         df_p.loc[df_p["Référence"] == ref_id, ["Prix Achat", "Prix Vente", "Quantité"]] = [n_pa, n_pv, n_qt]
                         df_p.to_csv(F_PIECES, index=False)
                         st.session_state[f"pop_act_{ref_id}"] = False
-                        st.success("Données enregistrées avec succès !")
+                        st.success("Données enregistrées !")
                         st.rerun()
                         
-                with c_panel2:
-                    st.markdown("### ❌ Supprimer définitivement")
-                    st.write("Retirer cette pièce de votre catalogue magasin.")
                     if st.button("🗑️ Effacer la fiche produit", key=f"del_{ref_id}", type="secondary", use_container_width=True):
                         df_p = df_p[df_p["Référence"] != ref_id]
                         df_p.to_csv(F_PIECES, index=False)
@@ -90,8 +113,9 @@ with t1:
                         st.success("Fiche produit effacée.")
                         st.rerun()
                 st.write("---")
-    if df_affichage.empty:
-        st.info("Aucun article trouvé.")
+            st.write("---")
+    else:
+        st.info("Le catalogue est vide.")
 
 # ---------------------------------------------------------------------
 # ONGLET 2 : AJOUTER UNE NOUVELLE FICHE PRODUIT BLANCHE
@@ -111,10 +135,36 @@ with t2:
         if not ref_add or not nom_add:
             st.error("La Référence et le Nom de la pièce sont obligatoires.")
         elif ref_add in df_p["Référence"].astype(str).values:
-            st.error("Cette référence existe déjà ! Modifiez son stock directement dans le premier onglet.")
+            st.error("Cette référence existe déjà !")
         else:
             nouvelle_ligne = pd.DataFrame([[ref_add, nom_add, cat_add, pa_add, pv_add, stock_add, seuil_add]], columns=df_p.columns)
             df_p = pd.concat([df_p, nouvelle_ligne], ignore_index=True)
             df_p.to_csv(F_PIECES, index=False)
-            st.success("Nouvelle référence ajoutée avec succès au catalogue !")
+            st.success("Nouvelle référence ajoutée au catalogue !")
             st.rerun()
+
+# ---------------------------------------------------------------------
+# NOUVEL ONGLET 3 : HISTORIQUE DES VENTES EN DIRECT SANS COMPLEXITÉ
+# ---------------------------------------------------------------------
+with t3:
+    st.subheader("📈 Liste de toutes vos ventes passées")
+    if not df_v.empty:
+        st.write("Retrouvez ci-dessous l'historique complet de vos ventes enregistrées au jour le jour :")
+        # Tri de la plus récente à la plus ancienne vente
+        st.dataframe(df_v.sort_index(ascending=False), use_container_width=True, hide_index=True)
+        
+        st.write("### 🔄 Corriger une erreur")
+        for idx_mv, row_mv in df_v.sort_index(ascending=False).iterrows():
+            with st.expander(f"🔹 Action : Annuler la vente du {row_mv['Date']} (Réf: {row_mv['Référence']})"):
+                if st.button("Confirmer l'annulation", key=f"annul_v_{idx_mv}", use_container_width=True, type="primary"):
+                    ref_cible = str(row_mv['Référence'])
+                    qte_cible = int(row_mv['Quantité'])
+                    if ref_cible in df_p["Référence"].values:
+                        df_p.loc[df_p["Référence"] == ref_cible, "Quantité"] += qte_cible
+                        df_p.to_csv(F_PIECES, index=False)
+                    df_v = df_v.drop(idx_mv)
+                    df_v.to_csv(F_VENTES, index=False)
+                    st.success("Vente annulée et stock remis en rayon !")
+                    st.rerun()
+    else:
+        st.info("Aucune vente n'a encore été enregistrée dans le système.")
