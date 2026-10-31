@@ -176,3 +176,15 @@ with t2:
 # ONGLET 3 : HISTORIQUE DES VENTES EN DIRECT (PLATE ET ANTI-PLANTAGE)
 # ---------------------------------------------------------------------
 with t3:
+st.subheader("📈 Historique des Ventes")
+    
+    if not df_v.empty:
+        # Tri de l'historique par date la plus récente
+        df_v_tri = df_v.sort_index(ascending=False)
+        st.dataframe(df_v_tri, use_container_width=True)
+        
+        # Petit calcul du chiffre d'affaires total pour le bonus
+        total_ca = df_v["Total Vente"].sum()
+        st.metric(label="Chiffre d'affaires Total", value=f"{total_ca:,.2f} €")
+    else:
+        st.info("Aucune vente n'a encore été enregistrée.")
