@@ -168,5 +168,4 @@ with t3:
         
         dates_uniques = df_v["Date"].unique()
         lignes_bilan = []
-        
-        for d in dates_uniques:
+          for d in dates_uniques:
