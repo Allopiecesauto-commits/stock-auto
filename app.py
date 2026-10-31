@@ -7,7 +7,7 @@ st.set_page_config(page_title="Stock Auto", layout="wide")
 
 F_PIECES, F_VENTES = "web_pieces.csv", "web_ventes.csv"
 
-# Initialisation des fichiers
+# Initialisation des fichiers avec les structures exactes
 if not os.path.exists(F_PIECES):
     pd.DataFrame(columns=["Référence", "Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Quantité", "Alerte Min"]).to_csv(F_PIECES, index=False)
 if not os.path.exists(F_VENTES):
@@ -15,6 +15,11 @@ if not os.path.exists(F_VENTES):
 
 df_p = pd.read_csv(F_PIECES)
 df_v = pd.read_csv(F_VENTES)
+
+# Sécurité : Réinitialisation forcée si le fichier d'historique s'est décalé
+if not df_v.empty and len(df_v.columns) != 7:
+    df_v = pd.DataFrame(columns=["Date", "Référence", "Désignation", "Quantité", "Total Vente", "Tiers", "Paiement"])
+    df_v.to_csv(F_VENTES, index=False)
 
 st.title("🚗 Gestion de Stock Auto")
 
@@ -35,7 +40,7 @@ with t1:
     
     df_affichage = df_p.copy()
     if recherche and not df_p.empty:
-        df_affichage = df_p[df_p["Référence"].astype(str).str.contains(recherche, na=False) | df_p["Désignation"].astype(str).str.upper().str.contains(recherche, na=False)]
+        df_affichage = df_p[df_p["Référence"].astype(str).str.contains(recherche, na=False) | df_affichage["Désignation"].astype(str).str.upper().str.contains(recherche, na=False)]
         
     if not df_affichage.empty:
         st.write("---")
@@ -85,6 +90,7 @@ with t1:
                             df_p.to_csv(F_PIECES, index=False)
                             
                             tot_v = float(row["Prix Vente"] * q_vendu)
+                            # CORRIGÉ : Exactement 7 colonnes pour correspondre parfaitement au fichier web_ventes.csv
                             nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], int(q_vendu), float(tot_v), str(q_client), str(q_paye)]], columns=df_v.columns)
                             df_v = pd.concat([df_v, nouvel_hist], ignore_index=True)
                             df_v.to_csv(F_VENTES, index=False)
@@ -144,13 +150,12 @@ with t2:
             st.rerun()
 
 # ---------------------------------------------------------------------
-# NOUVEL ONGLET 3 : HISTORIQUE DES VENTES EN DIRECT SANS COMPLEXITÉ
+# ONGLET 3 : HISTORIQUE DES VENTES EN DIRECT
 # ---------------------------------------------------------------------
 with t3:
     st.subheader("📈 Liste de toutes vos ventes passées")
     if not df_v.empty:
         st.write("Retrouvez ci-dessous l'historique complet de vos ventes enregistrées au jour le jour :")
-        # Tri de la plus récente à la plus ancienne vente
         st.dataframe(df_v.sort_index(ascending=False), use_container_width=True, hide_index=True)
         
         st.write("### 🔄 Corriger une erreur")
@@ -164,7 +169,3 @@ with t3:
                         df_p.to_csv(F_PIECES, index=False)
                     df_v = df_v.drop(idx_mv)
                     df_v.to_csv(F_VENTES, index=False)
-                    st.success("Vente annulée et stock remis en rayon !")
-                    st.rerun()
-    else:
-        st.info("Aucune vente n'a encore été enregistrée dans le système.")
