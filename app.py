@@ -177,5 +177,4 @@ with t2:
 # ---------------------------------------------------------------------
 with t3:
     st.subheader("📈 Historique des Ventes")
-    
-    if not df_v.empty:
+    st.dataframe(df_v, use_container_width=True)
