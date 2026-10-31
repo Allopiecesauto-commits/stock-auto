@@ -7,6 +7,7 @@ st.set_page_config(page_title="Stock Auto", layout="wide")
 
 F_PIECES, F_MOUV = "web_pieces.csv", "web_mouvements.csv"
 
+# Initialisation des fichiers avec 8 colonnes strictes pour les mouvements
 if not os.path.exists(F_PIECES):
     pd.DataFrame(columns=["Référence", "Désignation", "Catégorie", "Prix Achat", "Prix Vente", "Quantité", "Alerte Min"]).to_csv(F_PIECES, index=False)
 if not os.path.exists(F_MOUV):
@@ -15,6 +16,7 @@ if not os.path.exists(F_MOUV):
 df_p = pd.read_csv(F_PIECES)
 df_m = pd.read_csv(F_MOUV)
 
+# Forçage de sécurité pour nettoyer l'historique s'il y a un décalage de colonnes
 if not df_m.empty and len(df_m.columns) != 8:
     df_m = pd.DataFrame(columns=["Date", "Référence", "Type", "Quantité", "Total Achat", "Total Vente", "Tiers", "Paiement"])
     df_m.to_csv(F_MOUV, index=False)
@@ -23,6 +25,7 @@ st.title("🚗 Gestion de Stock Auto")
 
 t1, t2, t3, t4, t5 = st.tabs(["📊 Accueil & Stock", "📦 Ajouter / Modifier", "📥 Commande Fournisseur", "📤 Retour Fournisseur", "📈 Bilans & Caisse"])
 
+# Initialisation propre des boutons
 for idx, row in df_p.iterrows():
     r_id = row['Référence']
     if f"pop_v_{r_id}" not in st.session_state:
@@ -31,7 +34,7 @@ for idx, row in df_p.iterrows():
         st.session_state[f"pop_a_{r_id}"] = False
 
 # ---------------------------------------------------------------------
-# ONGLET 1 : ACCUEIL
+# ONGLET 1 : ACCUEIL & RECHERCHE
 # ---------------------------------------------------------------------
 with t1:
     st.subheader("Liste du stock en magasin")
@@ -75,6 +78,7 @@ with t1:
                     df_p.to_csv(F_PIECES, index=False)
                     pa_t = float(row["Prix Achat"] * q_vendu)
                     pv_t = float(row["Prix Vente"] * q_vendu)
+                    # CORRIGÉ : 8 éléments exacts pour correspondre aux 8 colonnes du fichier
                     nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, "Vente", int(q_vendu), float(pa_t), float(pv_t), str(q_client), str(q_paye)]], columns=df_m.columns)
                     pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
                     st.session_state[f"pop_v_{ref_id}"] = False
@@ -155,11 +159,3 @@ with t3:
             pd.concat([df_m, nouvel_hist], ignore_index=True).to_csv(F_MOUV, index=False)
             st.success("Livraison fournisseur enregistrée !")
             st.rerun()
-        if ref_mouv not in df_p["Référence"].astype(str).values:
-            st.error("Référence introuvable.")
-
-# ---------------------------------------------------------------------
-# ONGLET 4 : RETOUR FOURNISSEUR
-# ---------------------------------------------------------------------
-with t4:
-    st.subheader("📤 Formulaire de Retour Marchandise")
