@@ -25,6 +25,9 @@ st.title("🚗 Gestion de Stock Auto")
 
 t1, t2, t3 = st.tabs(["📊 Accueil & Actions rapides", "📦 Créer Nouvelle Fiche", "📈 Historique des Ventes"])
 
+if "filtre_alerte" not in st.session_state:
+    st.session_state.filtre_alerte = False
+
 # Initialisation des états d'affichage
 for idx, row in df_p.iterrows():
     r_id = str(row['Référence'])
@@ -36,13 +39,36 @@ for idx, row in df_p.iterrows():
 # ---------------------------------------------------------------------
 with t1:
     st.subheader("📋 Liste du stock et Actions en direct")
-    recherche = st.text_input("Saisir un nom ou une référence pour chercher :", key="main_search").strip().upper()
     
-    df_affichage = df_p.copy()
-    if recherche and not df_p.empty:
-        df_affichage = df_p[df_p["Référence"].astype(str).str.contains(recherche, na=False) | df_affichage["Désignation"].astype(str).str.upper().str.contains(recherche, na=False)]
+    # Boutons d'alerte et compteurs remis en place
+    alt_df = df_p[df_p["Quantité"] <= df_p["Alerte Min"]] if not df_p.empty else pd.DataFrame()
+    nb_alt = len(alt_df)
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button(f"📋 Total Références : {len(df_p)}", use_container_width=True, key="btn_tot_ref"):
+            st.session_state.filtre_alerte = False
+            st.rerun()
+    with c2:
+        if st.button(f"⚠️ Alertes rupture : {nb_alt}", use_container_width=True, type="primary" if nb_alt > 0 else "secondary", key="btn_alt_ruf"):
+            st.session_state.filtre_alerte = True
+            st.rerun()
+
+    # Application du filtre d'alerte rupture si cliqué
+    df_affichage = alt_df if st.session_state.filtre_alerte else df_p.copy()
+
+    if st.session_state.filtre_alerte:
+        st.warning("🚨 Affichage des pièces en alerte rupture uniquement")
+
+    # Barre de recherche de texte
+    req = st.text_input("Rechercher (Réf ou Nom) :", key="search_bar").strip().upper()
+    if req and not df_affichage.empty:
+        df_affichage = df_affichage[df_affichage["Référence"].astype(str).str.contains(req, na=False) | df_affichage["Désignation"].astype(str).str.upper().str.contains(req, na=False)]
         
+    # TRI AUTOMATIQUE PAR ORDRE ALPHABÉTIQUE DES CATÉGORIES
     if not df_affichage.empty:
+        df_affichage = df_affichage.sort_values(by=["Catégorie", "Référence"], ascending=[True, True])
+        
         st.write("---")
         col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7, col_h8 = st.columns([1.5, 2.5, 1.5, 1.2, 1.2, 1.2, 1.2, 2])
         col_h1.markdown("**Référence**")
@@ -90,7 +116,6 @@ with t1:
                             df_p.to_csv(F_PIECES, index=False)
                             
                             tot_v = float(row["Prix Vente"] * q_vendu)
-                            # CORRIGÉ : Exactement 7 colonnes pour correspondre parfaitement au fichier web_ventes.csv
                             nouvel_hist = pd.DataFrame([[datetime.now().strftime("%Y-%m-%d"), ref_id, row['Désignation'], int(q_vendu), float(tot_v), str(q_client), str(q_paye)]], columns=df_v.columns)
                             df_v = pd.concat([df_v, nouvel_hist], ignore_index=True)
                             df_v.to_csv(F_VENTES, index=False)
@@ -121,7 +146,7 @@ with t1:
                 st.write("---")
             st.write("---")
     else:
-        st.info("Le catalogue est vide.")
+        st.info("Aucun article trouvé.")
 
 # ---------------------------------------------------------------------
 # ONGLET 2 : AJOUTER UNE NOUVELLE FICHE PRODUIT BLANCHE
@@ -155,17 +180,3 @@ with t2:
 with t3:
     st.subheader("📈 Liste de toutes vos ventes passées")
     if not df_v.empty:
-        st.write("Retrouvez ci-dessous l'historique complet de vos ventes enregistrées au jour le jour :")
-        st.dataframe(df_v.sort_index(ascending=False), use_container_width=True, hide_index=True)
-        
-        st.write("### 🔄 Corriger une erreur")
-        for idx_mv, row_mv in df_v.sort_index(ascending=False).iterrows():
-            with st.expander(f"🔹 Action : Annuler la vente du {row_mv['Date']} (Réf: {row_mv['Référence']})"):
-                if st.button("Confirmer l'annulation", key=f"annul_v_{idx_mv}", use_container_width=True, type="primary"):
-                    ref_cible = str(row_mv['Référence'])
-                    qte_cible = int(row_mv['Quantité'])
-                    if ref_cible in df_p["Référence"].values:
-                        df_p.loc[df_p["Référence"] == ref_cible, "Quantité"] += qte_cible
-                        df_p.to_csv(F_PIECES, index=False)
-                    df_v = df_v.drop(idx_mv)
-                    df_v.to_csv(F_VENTES, index=False)
