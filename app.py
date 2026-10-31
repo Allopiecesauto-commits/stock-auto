@@ -173,9 +173,10 @@ with t2:
             st.rerun()
 
 # ---------------------------------------------------------------------
-# ONGLET 3 : HISTORIQUE DES VENTES & ANNULATION AUTOMATIQUE
+# ONGLET 3 : HISTORIQUE DES VENTES & ANNULATION AUTOMATIQUE (VERSION SÉCURISÉE MOBILE)
 # ---------------------------------------------------------------------
 with t3:
     st.subheader("📈 Historique des Ventes")
     
-    if not df_v.empty:
+    # En-têtes fixes
+    st.write("---")
