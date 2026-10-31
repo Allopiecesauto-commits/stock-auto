@@ -35,7 +35,7 @@ for idx, row in df_p.iterrows():
         st.session_state[f"pop_act_{r_id}"] = False
 
 # ---------------------------------------------------------------------
-# ONGLET 1 : ACCUEIL & GESTION DU STOCK DIRECT
+# ONGLET 1 : ACCUEIL & GESTION DU STOCK DIRECT (TRIÉ PAR CATÉGORIE)
 # ---------------------------------------------------------------------
 with t1:
     st.subheader("📋 Liste du stock et Actions en direct")
@@ -45,14 +45,12 @@ with t1:
     nb_alt = len(alt_df)
     
     c1, c2 = st.columns(2)
-    with c1:
-        if st.button(f"📋 Total Références : {len(df_p)}", use_container_width=True, key="btn_tot_ref"):
-            st.session_state.filtre_alerte = False
-            st.rerun()
-    with c2:
-        if st.button(f"⚠️ Alertes rupture : {nb_alt}", use_container_width=True, type="primary" if nb_alt > 0 else "secondary", key="btn_alt_ruf"):
-            st.session_state.filtre_alerte = True
-            st.rerun()
+    if c1.button(f"📋 Total Références : {len(df_p)}", use_container_width=True, key="btn_tot_ref"):
+        st.session_state.filtre_alerte = False
+        st.rerun()
+    if c2.button(f"⚠️ Alertes rupture : {nb_alt}", use_container_width=True, type="primary" if nb_alt > 0 else "secondary", key="btn_alt_ruf"):
+        st.session_state.filtre_alerte = True
+        st.rerun()
 
     # Application du filtre d'alerte rupture si cliqué
     df_affichage = alt_df if st.session_state.filtre_alerte else df_p.copy()
@@ -65,7 +63,7 @@ with t1:
     if req and not df_affichage.empty:
         df_affichage = df_affichage[df_affichage["Référence"].astype(str).str.contains(req, na=False) | df_affichage["Désignation"].astype(str).str.upper().str.contains(req, na=False)]
         
-    # TRI AUTOMATIQUE PAR ORDRE ALPHABÉTIQUE DES CATÉGORIES
+    # CLASSEMENT PAR ORDRE ALPHABÉTIQUE DES CATÉGORIES
     if not df_affichage.empty:
         df_affichage = df_affichage.sort_values(by=["Catégorie", "Référence"], ascending=[True, True])
         
@@ -145,7 +143,7 @@ with t1:
                         st.rerun()
                 st.write("---")
             st.write("---")
-    else:
+    if df_affichage.empty:
         st.info("Aucun article trouvé.")
 
 # ---------------------------------------------------------------------
@@ -175,8 +173,6 @@ with t2:
             st.rerun()
 
 # ---------------------------------------------------------------------
-# ONGLET 3 : HISTORIQUE DES VENTES EN DIRECT
+# ONGLET 3 : HISTORIQUE DES VENTES EN DIRECT (PLATE ET ANTI-PLANTAGE)
 # ---------------------------------------------------------------------
 with t3:
-    st.subheader("📈 Liste de toutes vos ventes passées")
-    if not df_v.empty:
