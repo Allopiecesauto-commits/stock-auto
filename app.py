@@ -1,22 +1,32 @@
 from datetime import datetime
 import pandas as pd
+import requests
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Stock Auto", layout="wide")
 
-# Lien de votre Google Sheet
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1H4GYOMMqA6lGpbXhbQ-HrzFJAeoBjj7TdFcq_62nirg/edit?usp=sharing"
-
-# Connexion aux Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
+# URL de votre passerelle Google Apps Script intégrée
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzH7w2yTxxslMP0lAD45LslEJTZkcbSbXVyoPONJEeO8kWiS1rhZWSS6ORVzBAEM33BJQ/exec"
 
 
-# --- FONCTIONS DE CHARGEMENT ET SAUVEGARDE ---
+# --- FONCTIONS DE CHARGEMENT ET SAUVEGARDE VIA API ---
 def load_data():
     try:
-        df_p = conn.read(spreadsheet=SHEET_URL, worksheet="Pieces", ttl=0)
-        df_p = df_p.dropna(how="all")
+        res_p = requests.get(f"{WEB_APP_URL}?sheet=Pieces", timeout=10)
+        data_p = res_p.json()
+        df_p = pd.DataFrame(data_p) if data_p else pd.DataFrame()
+        if df_p.empty:
+            df_p = pd.DataFrame(
+                columns=[
+                    "Référence",
+                    "Désignation",
+                    "Catégorie",
+                    "Prix Achat",
+                    "Prix Vente",
+                    "Quantité",
+                    "Alerte Min",
+                ]
+            )
     except Exception:
         df_p = pd.DataFrame(
             columns=[
@@ -31,8 +41,21 @@ def load_data():
         )
 
     try:
-        df_v = conn.read(spreadsheet=SHEET_URL, worksheet="Ventes", ttl=0)
-        df_v = df_v.dropna(how="all")
+        res_v = requests.get(f"{WEB_APP_URL}?sheet=Ventes", timeout=10)
+        data_v = res_v.json()
+        df_v = pd.DataFrame(data_v) if data_v else pd.DataFrame()
+        if df_v.empty:
+            df_v = pd.DataFrame(
+                columns=[
+                    "Date",
+                    "Référence",
+                    "Désignation",
+                    "Quantité",
+                    "Total Vente",
+                    "Tiers",
+                    "Paiement",
+                ]
+            )
     except Exception:
         df_v = pd.DataFrame(
             columns=[
@@ -50,11 +73,19 @@ def load_data():
 
 
 def save_pieces(df_p):
-    conn.update(spreadsheet=SHEET_URL, worksheet="Pieces", data=df_p)
+    payload = {"sheet": "Pieces", "rows": df_p.to_dict(orient="records")}
+    try:
+        requests.post(WEB_APP_URL, json=payload, timeout=10)
+    except Exception:
+        pass
 
 
 def save_ventes(df_v):
-    conn.update(spreadsheet=SHEET_URL, worksheet="Ventes", data=df_v)
+    payload = {"sheet": "Ventes", "rows": df_v.to_dict(orient="records")}
+    try:
+        requests.post(WEB_APP_URL, json=payload, timeout=10)
+    except Exception:
+        pass
 
 
 # Chargement initial
@@ -102,212 +133,4 @@ with t1:
         key="btn_tot_ref",
     ):
         st.session_state.filtre_alerte = False
-        st.rerun()
-    if c2.button(
-        f"⚠️ Alertes rupture : {nb_alt}",
-        use_container_width=True,
-        type="primary" if nb_alt > 0 else "secondary",
-        key="btn_alt_ruf",
-    ):
-        st.session_state.filtre_alerte = True
-        st.rerun()
-
-    df_affichage = alt_df if st.session_state.filtre_alerte else df_p.copy()
-
-    if st.session_state.filtre_alerte:
-        st.warning(
-            "🚨 Affichage des pièces en alerte rupture uniquement (Cliquez sur 'Total Références' pour tout afficher)"
-        )
-
-    req = st.text_input("Rechercher (Réf ou Nom) :", key="search_bar").strip().upper()
-    if req and not df_affichage.empty:
-        df_affichage = df_affichage[
-            df_affichage["Référence"].astype(str).str.contains(req, na=False)
-            | df_affichage["Désignation"]
-            .astype(str)
-            .str.upper()
-            .str.contains(req, na=False)
-        ]
-
-    if not df_affichage.empty:
-        df_affichage = df_affichage.sort_values(
-            by=["Catégorie", "Référence"], ascending=[True, True]
-        )
-
-        st.write("---")
-        col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7, col_h8 = (
-            st.columns([1.5, 2.5, 1.5, 1.2, 1.2, 1.2, 1.2, 2])
-        )
-        col_h1.markdown("**Référence**")
-        col_h2.markdown("**Désignation**")
-        col_h3.markdown("**Catégorie**")
-        col_h4.markdown("**P. Achat**")
-        col_h5.markdown("**P. Vente**")
-        col_h6.markdown("**En Stock**")
-        col_h7.markdown("**Seuil Alerte**")
-        col_h8.markdown("**Gérer la pièce**")
-        st.write("---")
-
-        for idx, row in df_affichage.iterrows():
-            ref_id = str(row["Référence"])
-            qte_actuelle = float(row["Quantité"])
-            seuil_min = float(row["Alerte Min"])
-
-            prefix = "⚠️ " if qte_actuelle <= seuil_min else "✅ "
-
-            col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7, col_r8 = (
-                st.columns([1.5, 2.5, 1.5, 1.2, 1.2, 1.2, 1.2, 2])
-            )
-            col_r1.write(f"{prefix}{ref_id}")
-            col_r2.write(row["Désignation"])
-            col_r3.write(row["Catégorie"])
-            col_r4.write(f"{row['Prix Achat']} €")
-            col_r5.write(f"{row['Prix Vente']} €")
-            col_r6.write(f"**{row['Quantité']} pcs**")
-            col_r7.write(f"{row['Alerte Min']} pcs")
-
-            if col_r8.button(
-                "🛠️ Gérer / Vendre",
-                key=f"btn_act_{ref_id}",
-                use_container_width=True,
-            ):
-                st.session_state[f"pop_act_{ref_id}"] = not st.session_state[
-                    f"pop_act_{ref_id}"
-                ]
-
-            if st.session_state.get(f"pop_act_{ref_id}", False):
-                st.write("")
-                st.markdown(
-                    f"⚙️ **PANNEAU DE CONFIGURATION DIRECTE : {ref_id}**"
-                )
-                c_panel1, c_panel2 = st.columns(2)
-
-                with c_panel1:
-                    st.markdown("### 💸 Enregistrer une Vente rapide")
-                    q_client = st.text_input(
-                        "Nom du Client :",
-                        value="Client comptoir",
-                        key=f"qc_{ref_id}",
-                    ).strip()
-                    max_qte = int(qte_actuelle) if int(qte_actuelle) > 0 else 1
-                    q_vendu = st.number_input(
-                        "Quantité à vendre :",
-                        min_value=1,
-                        max_value=max_qte,
-                        step=1,
-                        key=f"qv_{ref_id}",
-                    )
-                    q_paye = st.radio(
-                        "Mode de règlement :",
-                        ["💵 Espèces", "💳 Carte Bancaire"],
-                        horizontal=True,
-                        key=f"qp_{ref_id}",
-                    )
-
-                    col_v1, col_v2 = st.columns(2)
-                    if col_v1.button(
-                        "Confirmer la vente",
-                        key=f"conf_v_{ref_id}",
-                        type="primary",
-                        use_container_width=True,
-                    ):
-                        if qte_actuelle < q_vendu:
-                            st.error("Stock insuffisant !")
-                        else:
-                            for i, p_row in df_p.iterrows():
-                                if str(p_row["Référence"]) == ref_id:
-                                    df_p.at[i, "Quantité"] = (
-                                        float(p_row["Quantité"]) - q_vendu
-                                    )
-                                    break
-                            save_pieces(df_p)
-
-                            tot_v = float(row["Prix Vente"]) * float(q_vendu)
-                            nouvel_hist = pd.DataFrame(
-                                [
-                                    [
-                                        datetime.now().strftime("%Y-%m-%d"),
-                                        ref_id,
-                                        row["Désignation"],
-                                        int(q_vendu),
-                                        float(tot_v),
-                                        str(q_client),
-                                        str(q_paye),
-                                    ]
-                                ],
-                                columns=df_v.columns,
-                            )
-                            df_v = pd.concat(
-                                [df_v, nouvel_hist], ignore_index=True
-                            )
-                            save_ventes(df_v)
-
-                            st.session_state[f"pop_act_{ref_id}"] = False
-                            st.success("Vente enregistrée !")
-                            st.rerun()
-
-                    if col_v2.button(
-                        "❌ Annuler",
-                        key=f"cancel_action_{ref_id}",
-                        use_container_width=True,
-                    ):
-                        st.session_state[f"pop_act_{ref_id}"] = False
-                        st.rerun()
-
-                with c_panel2:
-                    st.markdown("### 📦 Ajuster les prix ou le stock")
-                    n_pa = st.number_input(
-                        "Prix d'Achat unitaire (€) :",
-                        min_value=0.0,
-                        value=float(row["Prix Achat"]),
-                        step=0.5,
-                        key=f"pa_{ref_id}",
-                    )
-                    n_pv = st.number_input(
-                        "Prix de Vente unitaire (€) :",
-                        min_value=0.0,
-                        value=float(row["Prix Vente"]),
-                        step=0.5,
-                        key=f"pv_{ref_id}",
-                    )
-                    n_qt = st.number_input(
-                        "Modifier le Stock (Ajustement) :",
-                        min_value=0,
-                        value=int(qte_actuelle),
-                        step=1,
-                        key=f"qt_{ref_id}",
-                    )
-
-                    col_s1, col_s2 = st.columns(2)
-                    if col_s1.button(
-                        "💾 Sauvegarder",
-                        key=f"save_edit_{ref_id}",
-                        type="primary",
-                        use_container_width=True,
-                    ):
-                        for i, p_row in df_p.iterrows():
-                            if str(p_row["Référence"]) == ref_id:
-                                df_p.at[i, "Prix Achat"] = n_pa
-                                df_p.at[i, "Prix Vente"] = n_pv
-                                df_p.at[i, "Quantité"] = n_qt
-                                break
-                        save_pieces(df_p)
-                        st.session_state[f"pop_act_{ref_id}"] = False
-                        st.success("Modifications enregistrées !")
-                        st.rerun()
-
-                    if col_s2.button(
-                        "❌ Annuler",
-                        key=f"cancel_edit_{ref_id}",
-                        use_container_width=True,
-                    ):
-                        st.session_state[f"pop_act_{ref_id}"] = False
-                        st.rerun()
-
-                    if st.button(
-                        "🗑️ Effacer la fiche produit",
-                        key=f"del_{ref_id}",
-                        type="secondary",
-                        use_container_width=True,
-                    ):
-                        df_p
+        st.
