@@ -8,7 +8,8 @@ st.set_page_config(page_title="Stock Auto", layout="wide")
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzH7w2yTxxslMP0lAD45LslEJTZkcbSbXVyoPONJEeO8kWiS1rhZWSS6ORVzBAEM33BJQ/exec"
 
 
-# --- FONCTIONS DE CHARGEMENT ET SAUVEGARDE VIA API ---
+# --- FONCTIONS DE CHARGEMENT ET SAUVEGARDE AVEC CACHE OPTIMISÉ ---
+@st.cache_data(ttl=60)
 def load_data():
     try:
         res_p = requests.get(f"{WEB_APP_URL}?sheet=Pieces", timeout=10)
@@ -82,6 +83,7 @@ def save_pieces(df_p):
             json={"sheet": "Pieces", "rows": df_p.to_dict(orient="records")},
             timeout=10,
         )
+        st.cache_data.clear()
     except Exception:
         pass
 
@@ -93,6 +95,7 @@ def save_ventes(df_v):
             json={"sheet": "Ventes", "rows": df_v.to_dict(orient="records")},
             timeout=10,
         )
+        st.cache_data.clear()
     except Exception:
         pass
 
@@ -110,16 +113,34 @@ t1, t2, t3 = st.tabs(
 )
 
 # ---------------------------------------------------------------------
-# ONGLET 1 : STOCK & ACTIONS EN DIRECT
+# ONGLET 1 : STOCK & ACTIONS EN DIRECT & ALERTES
 # ---------------------------------------------------------------------
 with t1:
     st.subheader("📋 Liste du stock et Actions en direct")
 
     if not df_p.empty:
-        for idx, row in df_p.iterrows():
-            r_id = str(row["Référence"])
-            if f"pop_act_{r_id}" not in st.session_state:
-                st.session_state[f"pop_act_{r_id}"] = False
+        # --- GESTION DES ALERTES DE STOCK ---
+        df_p_alert = df_p.copy()
+        df_p_alert["Qte_Num"] = (
+            pd.to_numeric(df_p_alert["Quantité"], errors="coerce").fillna(0)
+        )
+        df_p_alert["Seuil_Num"] = (
+            pd.to_numeric(df_p_alert["Alerte Min"], errors="coerce").fillna(0)
+        )
+        alertes = df_p_alert[df_p_alert["Qte_Num"] <= df_p_alert["Seuil_Num"]]
+
+        if not alertes.empty:
+            st.warning(
+                f"⚠️ **Attention : {len(alertes)} pièce(s) ont atteint ou sont"
+                " sous leur seuil d'alerte minimal !**"
+            )
+            for _, a_row in alertes.iterrows():
+                st.markdown(
+                    f"- 🔴 **{a_row['Référence']}** ({a_row['Désignation']}) :"
+                    f" Stock actuel = **{a_row['Quantité']}** (Seuil :"
+                    f" {a_row['Alerte Min']})"
+                )
+            st.write("---")
 
         req = (
             st.text_input("Rechercher (Réf ou Nom) :", key="search_bar")
@@ -138,11 +159,15 @@ with t1:
 
         for idx, row in df_affichage.iterrows():
             ref_id = str(row["Référence"])
+            unique_key = f"{ref_id}_{idx}"
             qte_actuelle = (
                 float(row["Quantité"])
                 if str(row["Quantité"]).strip() != ""
                 else 0.0
             )
+
+            if f"pop_act_{unique_key}" not in st.session_state:
+                st.session_state[f"pop_act_{unique_key}"] = False
 
             col_r1, col_r2, col_r3, col_r4, col_r5, col_r6 = st.columns(
                 [1.5, 2.5, 1.2, 1.2, 1.2, 2]
@@ -154,14 +179,14 @@ with t1:
 
             if col_r6.button(
                 "🛠️ Gérer / Vendre",
-                key=f"btn_act_{ref_id}",
+                key=f"btn_act_{unique_key}",
                 use_container_width=True,
             ):
-                st.session_state[f"pop_act_{ref_id}"] = not st.session_state[
-                    f"pop_act_{ref_id}"
+                st.session_state[f"pop_act_{unique_key}"] = not st.session_state[
+                    f"pop_act_{unique_key}"
                 ]
 
-            if st.session_state.get(f"pop_act_{ref_id}", False):
+            if st.session_state.get(f"pop_act_{unique_key}", False):
                 st.write("")
                 st.markdown(
                     f"⚙️ **CONFIGURATION DE LA PIÈCE : {ref_id}**"
@@ -173,7 +198,7 @@ with t1:
                     q_client = st.text_input(
                         "Client :",
                         value="Client comptoir",
-                        key=f"qc_{ref_id}",
+                        key=f"qc_{unique_key}",
                     )
                     q_vendu = st.number_input(
                         "Quantité vendue :",
@@ -182,18 +207,18 @@ with t1:
                         if int(qte_actuelle) > 0
                         else 1,
                         step=1,
-                        key=f"qv_{ref_id}",
+                        key=f"qv_{unique_key}",
                     )
                     q_paye = st.radio(
                         "Paiement :",
                         ["💵 Espèces", "💳 Carte Bancaire"],
                         horizontal=True,
-                        key=f"qp_{ref_id}",
+                        key=f"qp_{unique_key}",
                     )
 
                     if st.button(
                         "Confirmer la vente",
-                        key=f"conf_v_{ref_id}",
+                        key=f"conf_v_{unique_key}",
                         type="primary",
                     ):
                         if qte_actuelle < q_vendu:
@@ -227,7 +252,7 @@ with t1:
                             )
                             save_ventes(df_v)
 
-                            st.session_state[f"pop_act_{ref_id}"] = False
+                            st.session_state[f"pop_act_{unique_key}"] = False
                             st.success("Vente enregistrée !")
                             st.rerun()
 
@@ -238,11 +263,11 @@ with t1:
                         min_value=0,
                         value=int(qte_actuelle),
                         step=1,
-                        key=f"qt_{ref_id}",
+                        key=f"qt_{unique_key}",
                     )
                     if st.button(
                         "💾 Sauvegarder le stock",
-                        key=f"save_edit_{ref_id}",
+                        key=f"save_edit_{unique_key}",
                         type="primary",
                     ):
                         for i, p_row in df_p.iterrows():
@@ -250,18 +275,18 @@ with t1:
                                 df_p.at[i, "Quantité"] = n_qt
                                 break
                         save_pieces(df_p)
-                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.session_state[f"pop_act_{unique_key}"] = False
                         st.success("Stock mis à jour !")
                         st.rerun()
 
                     if st.button(
                         "🗑️ Supprimer la pièce",
-                        key=f"del_{ref_id}",
+                        key=f"del_{unique_key}",
                         type="secondary",
                     ):
-                        df_p = df_p[df_p["Référence"].astype(str) != ref_id]
+                        df_p = df_p[df_p.index != idx]
                         save_pieces(df_p)
-                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.session_state[f"pop_act_{unique_key}"] = False
                         st.success("Pièce supprimée.")
                         st.rerun()
                 st.write("---")
