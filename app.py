@@ -236,3 +236,160 @@ with t1:
                     n_qt = st.number_input(
                         "Nouveau stock :",
                         min_value=0,
+                        value=int(qte_actuelle),
+                        step=1,
+                        key=f"qt_{ref_id}",
+                    )
+                    if st.button(
+                        "💾 Sauvegarder le stock",
+                        key=f"save_edit_{ref_id}",
+                        type="primary",
+                    ):
+                        for i, p_row in df_p.iterrows():
+                            if str(p_row["Référence"]) == ref_id:
+                                df_p.at[i, "Quantité"] = n_qt
+                                break
+                        save_pieces(df_p)
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.success("Stock mis à jour !")
+                        st.rerun()
+
+                    if st.button(
+                        "🗑️ Supprimer la pièce",
+                        key=f"del_{ref_id}",
+                        type="secondary",
+                    ):
+                        df_p = df_p[df_p["Référence"].astype(str) != ref_id]
+                        save_pieces(df_p)
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.success("Pièce supprimée.")
+                        st.rerun()
+                st.write("---")
+            st.write("---")
+    else:
+        st.info("Aucun article dans la base. Utilisez l'onglet 'Ajouter une pièce'.")
+
+# ---------------------------------------------------------------------
+# ONGLET 2 : AJOUTER UNE NOUVELLE FICHE PRODUIT
+# ---------------------------------------------------------------------
+with t2:
+    st.subheader("📦 Ajouter une nouvelle référence")
+    r_add = st.text_input("Référence :").strip().upper()
+    n_add = st.text_input("Désignation :").strip()
+    c_add = st.text_input("Catégorie :").strip()
+    pa_add = st.number_input("Prix d'achat (€) :", min_value=0.0, step=0.5)
+    pv_add = st.number_input("Prix de vente (€) :", min_value=0.0, step=0.5)
+    stock_add = st.number_input("Quantité initiale :", min_value=0, step=1)
+    seuil_add = st.number_input("Seuil d'alerte :", min_value=0, step=1)
+
+    if st.button("➕ Enregistrer la pièce", type="primary"):
+        if r_add and n_add:
+            nouvelle_ligne = pd.DataFrame(
+                [[
+                    r_add,
+                    n_add,
+                    c_add,
+                    pa_add,
+                    pv_add,
+                    stock_add,
+                    seuil_add,
+                ]],
+                columns=df_p.columns,
+            )
+            df_p = pd.concat([df_p, nouvelle_ligne], ignore_index=True)
+            save_pieces(df_p)
+            st.success("Pièce ajoutée avec succès !")
+            st.rerun()
+        else:
+            st.error("La référence et la désignation sont obligatoires.")
+
+# ---------------------------------------------------------------------
+# ONGLET 3 : HISTORIQUE & BILAN MENSUEL
+# ---------------------------------------------------------------------
+with t3:
+    st.subheader("📊 Bilan Financier et Historique des Ventes")
+
+    if not df_v.empty:
+        df_v_calc = df_v.copy()
+        df_v_calc["Date"] = pd.to_datetime(df_v_calc["Date"], errors="coerce")
+        df_v_calc["Mois"] = df_v_calc["Date"].dt.strftime("%Y-%m")
+
+        if not df_p.empty and "Prix Achat" in df_p.columns:
+            df_v_merged = df_v_calc.merge(
+                df_p[["Référence", "Prix Achat"]], on="Référence", how="left"
+            )
+        else:
+            df_v_merged = df_v_calc.copy()
+            df_v_merged["Prix Achat"] = 0.0
+
+        df_v_merged["Prix Achat"] = (
+            df_v_merged["Prix Achat"].fillna(0).astype(float)
+        )
+        df_v_merged["Quantité"] = pd.to_numeric(
+            df_v_merged["Quantité"], errors="coerce"
+        ).fillna(0)
+        df_v_merged["Coût Achat"] = (
+            df_v_merged["Quantité"] * df_v_merged["Prix Achat"]
+        )
+        df_v_merged["Total Vente"] = pd.to_numeric(
+            df_v_merged["Total Vente"], errors="coerce"
+        ).fillna(0)
+
+        bilan_mensuel = (
+            df_v_merged.groupby("Mois")
+            .agg(
+                Ventes_CA=("Total Vente", "sum"),
+                Depenses_Achats=("Coût Achat", "sum"),
+                Nombre_Ventes=("Référence", "count"),
+            )
+            .reset_index()
+        )
+        bilan_mensuel["Benefice"] = (
+            bilan_mensuel["Ventes_CA"] - bilan_mensuel["Depenses_Achats"]
+        )
+        bilan_mensuel = bilan_mensuel.sort_values(by="Mois", ascending=False)
+
+        bilans_affiche = bilan_mensuel.rename(
+            columns={
+                "Mois": "Mois",
+                "Ventes_CA": "Chiffre d'Affaires (€)",
+                "Depenses_Achats": "Coût des Achats (€)",
+                "Nombre_Ventes": "Nb Ventes",
+                "Benefice": "Bénéfice Net (€)",
+            }
+        )
+
+        st.dataframe(bilans_affiche, use_container_width=True, hide_index=True)
+
+        st.write("---")
+        ca_total = df_v["Total Vente"].astype(float).sum()
+        m1, m2 = st.columns(2)
+        m1.metric("💰 Chiffre d'Affaires Total", f"{ca_total:.2f} €")
+        m2.metric("🧾 Nombre Total de Ventes", len(df_v))
+
+        st.write("---")
+        st.subheader("Historique détaillé")
+        for idx, row in df_v.iloc[::-1].iterrows():
+            col_h1, col_h2, col_h3, col_h4 = st.columns(
+                [1.5, 2.5, 1.5, 1.5]
+            )
+            col_h1.write(str(row["Date"]))
+            col_h2.write(f"{row['Référence']} - {row['Désignation']}")
+            col_h3.write(f"{row['Total Vente']} €")
+            if col_h4.button("↩️ Annuler", key=f"cancel_v_{idx}"):
+                ref_annul = str(row["Référence"])
+                qte_annul = int(row["Quantité"])
+                for i, p_row in df_p.iterrows():
+                    if str(p_row["Référence"]) == ref_annul:
+                        df_p.at[i, "Quantité"] = (
+                            int(p_row["Quantité"]) + qte_annul
+                        )
+                        break
+                save_pieces(df_p)
+                df_v = df_v.drop(idx)
+                save_ventes(df_v)
+                st.success("Vente annulée et stock remis à jour !")
+                st.rerun()
+            st.write("---")
+    else:
+        st.info("Aucune vente enregistrée pour le moment.")
