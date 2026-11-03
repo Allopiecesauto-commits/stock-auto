@@ -217,3 +217,273 @@ with t1:
                             df_p.loc[
                                 df_p["Référence"].astype(str) == ref_id,
                                 "Quantité",
+                            ] = (qte_actuelle - q_vendu)
+                            save_pieces(df_p)
+
+                            tot_v = float(row["Prix Vente"]) * float(q_vendu)
+                            nouvel_hist = pd.DataFrame(
+                                [
+                                    [
+                                        datetime.now().strftime("%Y-%m-%d"),
+                                        ref_id,
+                                        row["Désignation"],
+                                        int(q_vendu),
+                                        float(tot_v),
+                                        str(q_client),
+                                        str(q_paye),
+                                    ]
+                                ],
+                                columns=df_v.columns,
+                            )
+                            df_v = pd.concat(
+                                [df_v, nouvel_hist], ignore_index=True
+                            )
+                            save_ventes(df_v)
+
+                            st.session_state[f"pop_act_{ref_id}"] = False
+                            st.success("Vente enregistrée !")
+                            st.rerun()
+
+                    if col_v2.button(
+                        "❌ Annuler",
+                        key=f"cancel_action_{ref_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.rerun()
+
+                with c_panel2:
+                    st.markdown("### 📦 Ajuster les prix ou le stock")
+                    n_pa = st.number_input(
+                        "Prix d'Achat unitaire (€) :",
+                        min_value=0.0,
+                        value=float(row["Prix Achat"]),
+                        step=0.5,
+                        key=f"pa_{ref_id}",
+                    )
+                    n_pv = st.number_input(
+                        "Prix de Vente unitaire (€) :",
+                        min_value=0.0,
+                        value=float(row["Prix Vente"]),
+                        step=0.5,
+                        key=f"pv_{ref_id}",
+                    )
+                    n_qt = st.number_input(
+                        "Modifier le Stock (Ajustement) :",
+                        min_value=0,
+                        value=int(qte_actuelle),
+                        step=1,
+                        key=f"qt_{ref_id}",
+                    )
+
+                    col_s1, col_s2 = st.columns(2)
+                    if col_s1.button(
+                        "💾 Sauvegarder",
+                        key=f"save_edit_{ref_id}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        df_p.loc[
+                            df_p["Référence"].astype(str) == ref_id,
+                            ["Prix Achat", "Prix Vente", "Quantité"],
+                        ] = [n_pa, n_pv, n_qt]
+                        save_pieces(df_p)
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.success("Modifications enregistrées !")
+                        st.rerun()
+
+                    if col_s2.button(
+                        "❌ Annuler",
+                        key=f"cancel_edit_{ref_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.rerun()
+
+                    if st.button(
+                        "🗑️ Effacer la fiche produit",
+                        key=f"del_{ref_id}",
+                        type="secondary",
+                        use_container_width=True,
+                    ):
+                        df_p = df_p[df_p["Référence"].astype(str) != ref_id]
+                        save_pieces(df_p)
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.success("Fiche produit effacée.")
+                        st.rerun()
+                st.write("---")
+            st.write("---")
+    else:
+        st.info("Aucun article trouvé dans la base.")
+
+# ---------------------------------------------------------------------
+# ONGLET 2 : AJOUTER UNE NOUVELLE FICHE PRODUIT
+# ---------------------------------------------------------------------
+with t2:
+    st.subheader("📦 Ajouter une nouvelle référence au magasin")
+    ref_add = (
+        st.text_input("Référence de la pièce (Ex: 70AH) :", key="r_add")
+        .strip()
+        .upper()
+    )
+    nom_add = st.text_input(
+        "Nom / Désignation de la pièce :", key="n_add"
+    ).strip()
+    cat_add = st.text_input("Catégorie (Ex: Batterie) :", key="c_add").strip()
+    col_c1, col_c2 = st.columns(2)
+    pa_add = col_c1.number_input(
+        "Prix d'achat unitaire (€) :", min_value=0.0, step=0.5, key="pa_add_f"
+    )
+    pv_add = col_c2.number_input(
+        "Prix de vente unitaire (€) :", min_value=0.0, step=0.5, key="pv_add_f"
+    )
+    stock_add = col_c1.number_input(
+        "Stock de départ reçu :", min_value=0, step=1, key="s_add_f"
+    )
+    seuil_add = col_c2.number_input(
+        "Seuil d'alerte minimum :", min_value=0, step=1, key="seuil_add_f"
+    )
+
+    col_btn1, col_btn2 = st.columns(2)
+    if col_btn1.button(
+        "➕ Créer la pièce et l'ajouter",
+        type="primary",
+        use_container_width=True,
+    ):
+        if not ref_add or not nom_add:
+            st.error("La Référence et le Nom de la pièce sont obligatoires.")
+        elif ref_add in df_p["Référence"].astype(str).values:
+            st.error("Cette référence existe déjà !")
+        else:
+            nouvelle_ligne = pd.DataFrame(
+                [[
+                    ref_add,
+                    nom_add,
+                    cat_add,
+                    pa_add,
+                    pv_add,
+                    stock_add,
+                    seuil_add,
+                ]],
+                columns=df_p.columns,
+            )
+            df_p = pd.concat([df_p, nouvelle_ligne], ignore_index=True)
+            save_pieces(df_p)
+            st.success("Nouvelle référence ajoutée au catalogue !")
+            st.rerun()
+
+    if col_btn2.button("❌ Annuler / Réinitialiser", use_container_width=True):
+        st.rerun()
+
+# ---------------------------------------------------------------------
+# ONGLET 3 : HISTORIQUE DES VENTES & BILAN MENSUEL
+# ---------------------------------------------------------------------
+with t3:
+    st.subheader("📊 Bilan Financier par Mois (Ventes & Dépenses)")
+
+    if not df_v.empty:
+        df_v_calc = df_v.copy()
+        df_v_calc["Date"] = pd.to_datetime(df_v_calc["Date"], errors="coerce")
+        df_v_calc["Mois"] = df_v_calc["Date"].dt.strftime("%Y-%m")
+
+        df_v_merged = df_v_calc.merge(
+            df_p[["Référence", "Prix Achat"]], on="Référence", how="left"
+        )
+        df_v_merged["Prix Achat"] = (
+            df_v_merged["Prix Achat"].fillna(0).astype(float)
+        )
+        df_v_merged["Coût Achat"] = df_v_merged["Quantité"].astype(
+            float
+        ) * df_v_merged["Prix Achat"]
+        df_v_merged["Total Vente"] = df_v_merged["Total Vente"].astype(float)
+
+        bilan_mensuel = (
+            df_v_merged.groupby("Mois")
+            .agg(
+                Ventes_CA=("Total Vente", "sum"),
+                Depenses_Achats=("Coût Achat", "sum"),
+                Nombre_Ventes=("Référence", "count"),
+            )
+            .reset_index()
+        )
+        bilan_mensuel["Benefice"] = (
+            bilan_mensuel["Ventes_CA"] - bilan_mensuel["Depenses_Achats"]
+        )
+        bilan_mensuel = bilan_mensuel.sort_values(by="Mois", ascending=False)
+
+        st.dataframe(
+            bilan_mensuel.rename(
+                columns={
+                    "Mois": "Mois",
+                    "Ventes_CA": "Chiffre d'Affaires (€)",
+                    "Depenses_Achats": "Coût des Achats (€)",
+                    "Nombre_Ventes": "Nb Ventes",
+                    "Benefice": "Bénéfice Net (€)",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.write("---")
+        st.subheader("📈 Historique détaillé des Ventes & Annulation")
+        st.info(
+            "💡 En cliquant sur '↩️ Annuler', la vente est supprimée et les articles sont automatiquement remis dans le stock !"
+        )
+
+        ca_total = df_v["Total Vente"].astype(float).sum()
+        marge_totale = (
+            df_v_merged["Total Vente"].sum() - df_v_merged["Coût Achat"].sum()
+        )
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("💰 Chiffre d'Affaires Total", f"{ca_total:.2f} €")
+        m2.metric("📈 Marge / Bénéfice Total", f"{marge_totale:.2f} €")
+        m3.metric("🧾 Nombre Total de Ventes", len(df_v))
+
+        st.write("---")
+        col_h1, col_h2, col_h3, col_h4, col_h5, col_h6, col_h7 = st.columns(
+            [1.2, 1.5, 2.5, 1.0, 1.2, 1.5, 1.5]
+        )
+        col_h1.markdown("**Date**")
+        col_h2.markdown("**Référence**")
+        col_h3.markdown("**Désignation**")
+        col_h4.markdown("**Qté**")
+        col_h5.markdown("**Total**")
+        col_h6.markdown("**Client / Reglt**")
+        col_h7.markdown("**Action**")
+        st.write("---")
+
+        for idx, row in df_v.iloc[::-1].iterrows():
+            col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7 = (
+                st.columns([1.2, 1.5, 2.5, 1.0, 1.2, 1.5, 1.5])
+            )
+            col_r1.write(str(row["Date"]))
+            col_r2.write(str(row["Référence"]))
+            col_r3.write(str(row["Désignation"]))
+            col_r4.write(f"{row['Quantité']} pcs")
+            col_r5.write(f"{float(row['Total Vente']):.2f} €")
+            col_r6.write(f"{row['Tiers']}\n({row['Paiement']})")
+
+            if col_r7.button("↩️ Annuler", key=f"cancel_v_{idx}"):
+                ref_annul = str(row["Référence"])
+                qte_annul = int(row["Quantité"])
+
+                if ref_annul in df_p["Référence"].astype(str).values:
+                    # Correction propre de la mise à jour du DataFrame
+                    mask = df_p["Référence"].astype(str) == ref_annul
+                    df_p.loc[mask, "Quantité"] = (
+                        df_p.loc[mask, "Quantité"].astype(int) + qte_annul
+                    )
+                    save_pieces(df_p)
+
+                df_v = df_v.drop(idx)
+                save_ventes(df_v)
+
+                st.success(
+                    "Vente annulée avec succès : stock réincrémenté et Google Sheets mis à jour !"
+                )
+                st.rerun()
+            st.write("---")
+    else:
+        st.info("Aucune vente enregistrée pour le moment.")
