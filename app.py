@@ -50,15 +50,11 @@ def load_data():
 
 
 def save_pieces(df_p):
-    conn.update(
-        spreadsheet=SHEET_URL, worksheet="Pieces", data=df_p, clear=True
-    )
+    conn.update(worksheet="Pieces", data=df_p)
 
 
 def save_ventes(df_v):
-    conn.update(
-        spreadsheet=SHEET_URL, worksheet="Ventes", data=df_v, clear=True
-    )
+    conn.update(worksheet="Ventes", data=df_v)
 
 
 # Chargement initial
