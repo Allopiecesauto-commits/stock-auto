@@ -5,17 +5,14 @@ from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Stock Auto", layout="wide")
 
-# Lien de votre Google Sheet
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1H4GYOMMqA6lGpbXhbQ-HrzFJAeoBjj7TdFcq_62nirg/edit?usp=sharing"
-
-# Connexion aux Google Sheets
+# Connexion native à Google Sheets (qui utilise les Secrets configurés)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 
-# --- FONCTIONS DE CHARGEMENT ET SAUVEGARDE DIRECTES ---
+# --- FONCTIONS DE CHARGEMENT ET SAUVEGARDE ---
 def load_data():
     try:
-        df_p = conn.read(spreadsheet=SHEET_URL, worksheet="Pieces", ttl=0)
+        df_p = conn.read(worksheet="Pieces", ttl=0)
         df_p = df_p.dropna(how="all")
     except Exception:
         df_p = pd.DataFrame(
@@ -31,7 +28,7 @@ def load_data():
         )
 
     try:
-        df_v = conn.read(spreadsheet=SHEET_URL, worksheet="Ventes", ttl=0)
+        df_v = conn.read(worksheet="Ventes", ttl=0)
         df_v = df_v.dropna(how="all")
     except Exception:
         df_v = pd.DataFrame(
@@ -50,49 +47,11 @@ def load_data():
 
 
 def save_pieces(df_p):
-    client = conn.client
-    sheet = client.open_by_url(SHEET_URL)
-    ws = sheet.worksheet("Pieces")
-    ws.clear()
-    data = (
-        [df_p.columns.tolist()] + df_p.values.tolist()
-        if not df_p.empty
-        else [
-            [
-                "Référence",
-                "Désignation",
-                "Catégorie",
-                "Prix Achat",
-                "Prix Vente",
-                "Quantité",
-                "Alerte Min",
-            ]
-        ]
-    )
-    ws.update(data)
+    conn.update(worksheet="Pieces", data=df_p)
 
 
 def save_ventes(df_v):
-    client = conn.client
-    sheet = client.open_by_url(SHEET_URL)
-    ws = sheet.worksheet("Ventes")
-    ws.clear()
-    data = (
-        [df_v.columns.tolist()] + df_v.values.tolist()
-        if not df_v.empty
-        else [
-            [
-                "Date",
-                "Référence",
-                "Désignation",
-                "Quantité",
-                "Total Vente",
-                "Tiers",
-                "Paiement",
-            ]
-        ]
-    )
-    ws.update(data)
+    conn.update(worksheet="Ventes", data=df_v)
 
 
 # Chargement initial
@@ -154,7 +113,7 @@ with t1:
 
     if st.session_state.filtre_alerte:
         st.warning(
-            "🚨 Affichage des pièces en alerte rupture uniquement (Cliquez sur 'Total Références' pour tout réafficher)"
+            "🚨 Affichage des pièces en alerte rupture uniquement (Cliquez sur 'Total Références' pour tout afficher)"
         )
 
     req = st.text_input("Rechercher (Réf ou Nom) :", key="search_bar").strip().upper()
