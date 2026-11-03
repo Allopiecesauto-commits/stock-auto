@@ -33,4 +33,4 @@ def load_data():
     try:
         df_v = conn.read(spreadsheet=SHEET_URL, worksheet="Ventes", ttl=0)
         df_v = df_v.dropna(how="all")
-    except Exception
+    except Exception:
