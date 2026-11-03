@@ -244,3 +244,26 @@ with t1:
                             st.success("Vente enregistrée !")
                             st.rerun()
 
+                    if col_v2.button(
+                        "❌ Annuler",
+                        key=f"cancel_action_{ref_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.rerun()
+
+                with c_panel2:
+                    st.markdown("### 📦 Ajuster les prix ou le stock")
+                    n_pa = st.number_input(
+                        "Prix d'Achat unitaire (€) :",
+                        min_value=0.0,
+                        value=float(row["Prix Achat"]),
+                        step=0.5,
+                        key=f"pa_{ref_id}",
+                    )
+                    n_pv = st.number_input(
+                        "Prix de Vente unitaire (€) :",
+                        min_value=0.0,
+                        value=float(row["Prix Vente"]),
+                        step=0.5,
+                        key=
