@@ -5,17 +5,18 @@ from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Stock Auto", layout="wide")
 
-# Lien direct vers votre Google Sheet
+# Lien de votre Google Sheet
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1H4GYOMMqA6lGpbXhbQ-HrzFJAeoBjj7TdFcq_62nirg/edit?usp=sharing"
 
-# Connexion Google Sheets
+# Connexion aux Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 
-# Fonctions pour lire et sauvegarder les données
+# --- FONCTIONS DE CHARGEMENT ET SAUVEGARDE ---
 def load_data():
     try:
         df_p = conn.read(spreadsheet=SHEET_URL, worksheet="Pieces", ttl=0)
+        df_p = df_p.dropna(how="all")
     except Exception:
         df_p = pd.DataFrame(
             columns=[
@@ -31,6 +32,7 @@ def load_data():
 
     try:
         df_v = conn.read(spreadsheet=SHEET_URL, worksheet="Ventes", ttl=0)
+        df_v = df_v.dropna(how="all")
     except Exception:
         df_v = pd.DataFrame(
             columns=[
@@ -55,7 +57,7 @@ def save_ventes(df_v):
     conn.update(spreadsheet=SHEET_URL, worksheet="Ventes", data=df_v)
 
 
-# Chargement initial des données
+# Chargement initial
 df_p, df_v = load_data()
 
 st.title("🚗 Gestion de Stock Auto")
@@ -64,14 +66,13 @@ t1, t2, t3 = st.tabs(
     [
         "📊 Accueil & Actions rapides",
         "📦 Créer Nouvelle Fiche",
-        "📈 Historique des Ventes",
+        "📈 Historique & Bilan Mensuel",
     ]
 )
 
 if "filtre_alerte" not in st.session_state:
     st.session_state.filtre_alerte = False
 
-# Initialisation des états d'affichage
 if not df_p.empty:
     for idx, row in df_p.iterrows():
         r_id = str(row["Référence"])
@@ -85,7 +86,10 @@ with t1:
     st.subheader("📋 Liste du stock et Actions en direct")
 
     alt_df = (
-        df_p[df_p["Quantité"] <= df_p["Alerte Min"]]
+        df_p[
+            pd.to_numeric(df_p["Quantité"], errors="coerce").fillna(0)
+            <= pd.to_numeric(df_p["Alerte Min"], errors="coerce").fillna(0)
+        ]
         if not df_p.empty
         else pd.DataFrame()
     )
@@ -151,11 +155,10 @@ with t1:
 
         for idx, row in df_affichage.iterrows():
             ref_id = str(row["Référence"])
-            prefix = (
-                "⚠️ "
-                if float(row["Quantité"]) <= float(row["Alerte Min"])
-                else "✅ "
-            )
+            qte_actuelle = float(row["Quantité"])
+            seuil_min = float(row["Alerte Min"])
+
+            prefix = "⚠️ " if qte_actuelle <= seuil_min else "✅ "
 
             (
                 col_r1,
@@ -198,9 +201,7 @@ with t1:
                         value="Client comptoir",
                         key=f"qc_{ref_id}",
                     ).strip()
-                    max_qte = (
-                        int(row["Quantité"]) if int(row["Quantité"]) > 0 else 1
-                    )
+                    max_qte = int(qte_actuelle) if int(qte_actuelle) > 0 else 1
                     q_vendu = st.number_input(
                         "Quantité à vendre :",
                         min_value=1,
@@ -215,21 +216,23 @@ with t1:
                         key=f"qp_{ref_id}",
                     )
 
-                    if st.button(
+                    col_v1, col_v2 = st.columns(2)
+                    if col_v1.button(
                         "Confirmer la vente",
                         key=f"conf_v_{ref_id}",
                         type="primary",
                         use_container_width=True,
                     ):
-                        if row["Quantité"] < q_vendu:
+                        if qte_actuelle < q_vendu:
                             st.error("Stock insuffisant !")
                         else:
                             df_p.loc[
-                                df_p["Référence"] == ref_id, "Quantité"
-                            ] -= q_vendu
+                                df_p["Référence"].astype(str) == ref_id,
+                                "Quantité",
+                            ] = (qte_actuelle - q_vendu)
                             save_pieces(df_p)
 
-                            tot_v = float(row["Prix Vente"] * q_vendu)
+                            tot_v = float(row["Prix Vente"]) * float(q_vendu)
                             nouvel_hist = pd.DataFrame(
                                 [
                                     [
@@ -253,6 +256,14 @@ with t1:
                             st.success("Vente enregistrée !")
                             st.rerun()
 
+                    if col_v2.button(
+                        "❌ Annuler",
+                        key=f"cancel_action_{ref_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[f"pop_act_{ref_id}"] = False
+                        st.rerun()
+
                 with c_panel2:
                     st.markdown("### 📦 Ajuster les prix ou le stock")
                     n_pa = st.number_input(
@@ -272,23 +283,33 @@ with t1:
                     n_qt = st.number_input(
                         "Modifier le Stock (Ajustement) :",
                         min_value=0,
-                        value=int(row["Quantité"]),
+                        value=int(qte_actuelle),
                         step=1,
                         key=f"qt_{ref_id}",
                     )
 
-                    if st.button(
-                        "💾 Sauvegarder les modifications",
+                    col_s1, col_s2 = st.columns(2)
+                    if col_s1.button(
+                        "💾 Sauvegarder",
                         key=f"save_edit_{ref_id}",
+                        type="primary",
                         use_container_width=True,
                     ):
                         df_p.loc[
-                            df_p["Référence"] == ref_id,
+                            df_p["Référence"].astype(str) == ref_id,
                             ["Prix Achat", "Prix Vente", "Quantité"],
                         ] = [n_pa, n_pv, n_qt]
                         save_pieces(df_p)
                         st.session_state[f"pop_act_{ref_id}"] = False
-                        st.success("Données enregistrées !")
+                        st.success("Modifications enregistrées !")
+                        st.rerun()
+
+                    if col_s2.button(
+                        "❌ Annuler",
+                        key=f"cancel_edit_{ref_id}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[f"pop_act_{ref_id}"] = False
                         st.rerun()
 
                     if st.button(
@@ -297,7 +318,7 @@ with t1:
                         type="secondary",
                         use_container_width=True,
                     ):
-                        df_p = df_p[df_p["Référence"] != ref_id]
+                        df_p = df_p[df_p["Référence"].astype(str) != ref_id]
                         save_pieces(df_p)
                         st.session_state[f"pop_act_{ref_id}"] = False
                         st.success("Fiche produit effacée.")
@@ -305,7 +326,7 @@ with t1:
                 st.write("---")
             st.write("---")
     else:
-        st.info("Aucun article trouvé.")
+        st.info("Aucun article trouvé dans la base.")
 
 # ---------------------------------------------------------------------
 # ONGLET 2 : AJOUTER UNE NOUVELLE FICHE PRODUIT
@@ -335,8 +356,9 @@ with t2:
         "Seuil d'alerte minimum :", min_value=0, step=1, key="seuil_add_f"
     )
 
-    if st.button(
-        "➕ Créer la pièce et l'ajouter au magasin",
+    col_btn1, col_btn2 = st.columns(2)
+    if col_btn1.button(
+        "➕ Créer la pièce et l'ajouter",
         type="primary",
         use_container_width=True,
     ):
@@ -362,27 +384,74 @@ with t2:
             st.success("Nouvelle référence ajoutée au catalogue !")
             st.rerun()
 
+    if col_btn2.button("❌ Annuler / Réinitialiser", use_container_width=True):
+        st.rerun()
+
 # ---------------------------------------------------------------------
-# ONGLET 3 : HISTORIQUE DES VENTES & ANNULATION
+# ONGLET 3 : HISTORIQUE DES VENTES & BILAN MENSUEL
 # ---------------------------------------------------------------------
 with t3:
-    st.subheader("📈 Historique des Ventes")
+    st.subheader("📊 Bilan Financier par Mois (Ventes & Dépenses)")
 
     if not df_v.empty:
-        ca_total = df_v["Total Vente"].astype(float).sum()
+        df_v_calc = df_v.copy()
+        df_v_calc["Date"] = pd.to_datetime(df_v_calc["Date"], errors="coerce")
+        df_v_calc["Mois"] = df_v_calc["Date"].dt.strftime("%Y-%m")
 
-        df_merged = df_v.merge(
+        df_v_merged = df_v_calc.merge(
             df_p[["Référence", "Prix Achat"]], on="Référence", how="left"
         )
-        df_merged["Prix Achat"] = df_merged["Prix Achat"].fillna(0).astype(float)
-        marge_totale = ca_total - (
-            df_merged["Quantité"].astype(float) * df_merged["Prix Achat"]
-        ).sum()
+        df_v_merged["Prix Achat"] = (
+            df_v_merged["Prix Achat"].fillna(0).astype(float)
+        )
+        df_v_merged["Coût Achat"] = df_v_merged["Quantité"].astype(
+            float
+        ) * df_v_merged["Prix Achat"]
+        df_v_merged["Total Vente"] = df_v_merged["Total Vente"].astype(float)
+
+        bilan_mensuel = (
+            df_v_merged.groupby("Mois")
+            .agg(
+                Ventes_CA=("Total Vente", "sum"),
+                Depenses_Achats=("Coût Achat", "sum"),
+                Nombre_Ventes=("Référence", "count"),
+            )
+            .reset_index()
+        )
+        bilan_mensuel["Benefice"] = (
+            bilan_mensuel["Ventes_CA"] - bilan_mensuel["Depenses_Achats"]
+        )
+        bilan_mensuel = bilan_mensuel.sort_values(by="Mois", ascending=False)
+
+        st.dataframe(
+            bilan_mensuel.rename(
+                columns={
+                    "Mois": "Mois",
+                    "Ventes_CA": "Chiffre d'Affaires (€)",
+                    "Depenses_Achats": "Coût des Achats (€)",
+                    "Nombre_Ventes": "Nb Ventes",
+                    "Benefice": "Bénéfice Net (€)",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        st.write("---")
+        st.subheader("📈 Historique détaillé des Ventes & Annulation")
+        st.info(
+            "💡 En cliquant sur '↩️ Annuler cette vente', la vente est supprimée de l'historique et les articles sont automatiquement remis dans le stock !"
+        )
+
+        ca_total = df_v["Total Vente"].astype(float).sum()
+        marge_totale = (
+            df_v_merged["Total Vente"].sum() - df_v_merged["Coût Achat"].sum()
+        )
 
         m1, m2, m3 = st.columns(3)
         m1.metric("💰 Chiffre d'Affaires Total", f"{ca_total:.2f} €")
-        m2.metric("📈 Marge Brute Estimée", f"{marge_totale:.2f} €")
-        m3.metric("🧾 Nombre de Ventes", len(df_v))
+        m2.metric("📈 Marge / Bénéfice Total", f"{marge_totale:.2f} €")
+        m3.metric("🧾 Nombre Total de Ventes", len(df_v))
 
         st.write("---")
         (
@@ -424,16 +493,26 @@ with t3:
                 ref_annul = str(row["Référence"])
                 qte_annul = int(row["Quantité"])
 
+                # Remise des pièces dans le stock
                 if ref_annul in df_p["Référence"].astype(str).values:
                     df_p.loc[
                         df_p["Référence"].astype(str) == ref_annul, "Quantité"
-                    ] += qte_annul
+                    ] = (
+                        df_p.loc[
+                            df_p["Référence"].astype(str) == ref_annul,
+                            "Quantité",
+                        ].astype(int)
+                        + qte_annul
+                    )
                     save_pieces(df_p)
 
+                # Suppression de la ligne de vente et mise à jour
                 df_v = df_v.drop(idx)
                 save_ventes(df_v)
 
-                st.success("Vente annulée et stock réincrémenté !")
+                st.success(
+                    "Vente annulée avec succès : le stock a été réincrémenté et Google Sheets mis à jour !"
+                )
                 st.rerun()
             st.write("---")
     else:
